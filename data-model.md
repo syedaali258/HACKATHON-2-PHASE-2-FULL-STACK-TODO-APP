@@ -1,286 +1,403 @@
-# Data Model: Multi-User Todo Full-Stack Web Application
+# Data Model: Backend API & Database (Task Management Core)
 
-**Feature**: 002-multi-user-todo-app
+**Feature**: Backend API & Database (Task Management Core)
 **Date**: 2026-02-08
-**Purpose**: Define database schema and entity relationships
+**Phase**: Phase 1 - Design & Contracts
 
-## Entities
+## Overview
 
-### User
-
-**Purpose**: Represents a registered user account with authentication credentials.
-
-**Attributes**:
-- `id` (UUID, Primary Key): Unique identifier for the user
-- `email` (String, Unique, Not Null): User's email address (used for authentication)
-- `hashed_password` (String, Not Null): Bcrypt-hashed password
-- `created_at` (DateTime, Not Null): Timestamp when account was created
-- `updated_at` (DateTime, Not Null): Timestamp when account was last updated
-
-**Validation Rules**:
-- Email must be valid format (RFC 5322)
-- Email must be unique across all users
-- Password must be hashed before storage (never store plaintext)
-- Minimum password length: 8 characters (enforced before hashing)
-
-**Relationships**:
-- One user has many tasks (one-to-many)
-
-**Indexes**:
-- Primary key index on `id` (automatic)
-- Unique index on `email` (for fast lookup during signin)
-
-**Security Considerations**:
-- Password field is write-only (never returned in API responses)
-- Email is case-insensitive for uniqueness checks
-- User ID is derived from JWT token, never from client input
+This document defines the data model for the task management system. The model enforces multi-user data isolation through user ownership and supports all CRUD operations defined in the feature specification.
 
 ---
 
-### Task
+## Entity: Task
 
-**Purpose**: Represents a todo item owned by a specific user.
+### Description
 
-**Attributes**:
-- `id` (UUID, Primary Key): Unique identifier for the task
-- `user_id` (UUID, Foreign Key, Not Null): Reference to owning user
-- `title` (String, Not Null): Task title (max 200 characters)
-- `description` (String, Nullable): Optional task description (max 2000 characters)
-- `is_complete` (Boolean, Not Null, Default: False): Completion status
-- `created_at` (DateTime, Not Null): Timestamp when task was created
-- `updated_at` (DateTime, Not Null): Timestamp when task was last updated
+Represents a single todo item that a user needs to track. Each task is owned by exactly one user and can only be accessed, modified, or deleted by that user.
 
-**Validation Rules**:
-- Title must not be empty (minimum 1 character)
-- Title maximum length: 200 characters
-- Description maximum length: 2000 characters (if provided)
-- `is_complete` defaults to False for new tasks
-- `user_id` must reference an existing user
-
-**Relationships**:
-- Many tasks belong to one user (many-to-one)
-- Foreign key constraint on `user_id` references `User.id`
-- Cascade delete: When user is deleted, all their tasks are deleted
-
-**Indexes**:
-- Primary key index on `id` (automatic)
-- Index on `user_id` (critical for query performance - all queries filter by user)
-- Composite index on `(user_id, created_at DESC)` (for sorted task list queries)
-- Composite index on `(user_id, is_complete)` (for filtered queries by completion status)
-
-**Security Considerations**:
-- All queries MUST filter by authenticated user's ID
-- Task ownership verified before any update or delete operation
-- No task can be transferred between users (user_id is immutable after creation)
-
----
-
-## Entity Relationship Diagram
-
-```
-┌─────────────────────┐
-│       User          │
-├─────────────────────┤
-│ id (PK)             │
-│ email (UNIQUE)      │
-│ hashed_password     │
-│ created_at          │
-│ updated_at          │
-└─────────────────────┘
-          │
-          │ 1
-          │
-          │ owns
-          │
-          │ *
-          ▼
-┌─────────────────────┐
-│       Task          │
-├─────────────────────┤
-│ id (PK)             │
-│ user_id (FK)        │
-│ title               │
-│ description         │
-│ is_complete         │
-│ created_at          │
-│ updated_at          │
-└─────────────────────┘
-```
-
-**Relationship**: One User → Many Tasks (1:N)
-
----
-
-## State Transitions
-
-### Task Completion Status
-
-```
-┌─────────────┐
-│  Incomplete │ (is_complete = False)
-│  (default)  │
-└─────────────┘
-      │
-      │ PATCH /api/tasks/{id}/complete
-      ▼
-┌─────────────┐
-│  Complete   │ (is_complete = True)
-└─────────────┘
-      │
-      │ PATCH /api/tasks/{id}/complete (toggle)
-      ▼
-┌─────────────┐
-│  Incomplete │ (is_complete = False)
-└─────────────┘
-```
-
-**Rules**:
-- Tasks are created in incomplete state by default
-- Completion status can be toggled between True and False
-- No other states exist (binary: complete or incomplete)
-
----
-
-## Database Schema (SQLModel)
-
-### User Model
+### SQLModel Schema
 
 ```python
 from sqlmodel import SQLModel, Field
 from datetime import datetime
-from uuid import UUID, uuid4
-
-class User(SQLModel, table=True):
-    __tablename__ = "users"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    email: str = Field(unique=True, index=True, nullable=False)
-    hashed_password: str = Field(nullable=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-```
-
-### Task Model
-
-```python
-from sqlmodel import SQLModel, Field
-from datetime import datetime
-from uuid import UUID, uuid4
+from typing import Optional
 
 class Task(SQLModel, table=True):
+    """Task entity with user ownership for data isolation"""
+
     __tablename__ = "tasks"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
-    title: str = Field(max_length=200, nullable=False)
-    description: str | None = Field(default=None, max_length=2000)
-    is_complete: bool = Field(default=False, nullable=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
+    # Primary key
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    # User ownership (foreign key to users table)
+    user_id: str = Field(
+        nullable=False,
+        index=True,
+        description="ID of the user who owns this task"
+    )
+
+    # Task content
+    title: str = Field(
+        max_length=200,
+        nullable=False,
+        description="Task title (required)"
+    )
+
+    description: Optional[str] = Field(
+        default=None,
+        max_length=2000,
+        description="Optional task description"
+    )
+
+    # Task state
+    is_completed: bool = Field(
+        default=False,
+        nullable=False,
+        description="Whether the task is completed"
+    )
+
+    # Timestamps
+    created_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        description="When the task was created"
+    )
+
+    updated_at: datetime = Field(
+        default_factory=datetime.utcnow,
+        nullable=False,
+        description="When the task was last updated"
+    )
+```
+
+### Field Specifications
+
+| Field | Type | Constraints | Default | Description |
+|-------|------|-------------|---------|-------------|
+| `id` | Integer | PRIMARY KEY, AUTO INCREMENT | Auto-generated | Unique task identifier |
+| `user_id` | String | NOT NULL, INDEXED | - | Owner's user ID from JWT |
+| `title` | String | NOT NULL, MAX 200 chars | - | Task title (required) |
+| `description` | String | NULLABLE, MAX 2000 chars | NULL | Optional task description |
+| `is_completed` | Boolean | NOT NULL | False | Completion status |
+| `created_at` | Timestamp | NOT NULL | Current UTC time | Creation timestamp |
+| `updated_at` | Timestamp | NOT NULL | Current UTC time | Last update timestamp |
+
+### Indexes
+
+```sql
+-- Primary key index (automatic)
+CREATE UNIQUE INDEX pk_tasks ON tasks(id);
+
+-- User ownership index (for filtering)
+CREATE INDEX idx_tasks_user_id ON tasks(user_id);
+
+-- Composite index for sorted task lists
+CREATE INDEX idx_tasks_user_id_created_at ON tasks(user_id, created_at DESC);
+```
+
+**Index Rationale**:
+- `idx_tasks_user_id`: Optimizes all user-scoped queries (list, count)
+- `idx_tasks_user_id_created_at`: Optimizes task list retrieval with default sorting (newest first)
+
+### Constraints
+
+- **NOT NULL on user_id**: Every task must have an owner
+- **Foreign key to users**: Ensures referential integrity (if users table exists)
+- **Length limits**: Prevents database bloat and ensures reasonable data sizes
+- **Timestamp defaults**: Automatically tracks creation and modification times
+
+---
+
+## Pydantic Schemas (Request/Response)
+
+### TaskCreate (Request)
+
+```python
+from pydantic import BaseModel, Field, validator
+
+class TaskCreate(BaseModel):
+    """Schema for creating a new task"""
+
+    title: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Task title (required)"
+    )
+
+    description: str | None = Field(
+        None,
+        max_length=2000,
+        description="Optional task description"
+    )
+
+    is_completed: bool = Field(
+        default=False,
+        description="Initial completion status"
+    )
+
+    @validator('title')
+    def title_not_empty(cls, v):
+        """Ensure title is not just whitespace"""
+        if not v.strip():
+            raise ValueError('Title cannot be empty or whitespace')
+        return v.strip()
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "title": "Buy groceries",
+                "description": "Milk, eggs, bread",
+                "is_completed": False
+            }
+        }
+```
+
+### TaskUpdate (Request)
+
+```python
+class TaskUpdate(BaseModel):
+    """Schema for updating an existing task"""
+
+    title: str | None = Field(
+        None,
+        min_length=1,
+        max_length=200,
+        description="Updated task title"
+    )
+
+    description: str | None = Field(
+        None,
+        max_length=2000,
+        description="Updated task description"
+    )
+
+    is_completed: bool | None = Field(
+        None,
+        description="Updated completion status"
+    )
+
+    @validator('title')
+    def title_not_empty(cls, v):
+        """Ensure title is not just whitespace if provided"""
+        if v is not None and not v.strip():
+            raise ValueError('Title cannot be empty or whitespace')
+        return v.strip() if v else v
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "title": "Buy groceries and cook dinner",
+                "is_completed": True
+            }
+        }
+```
+
+### TaskResponse (Response)
+
+```python
+from datetime import datetime
+
+class TaskResponse(BaseModel):
+    """Schema for task responses"""
+
+    id: int
+    user_id: str
+    title: str
+    description: str | None
+    is_completed: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True  # Enable ORM model conversion
+        schema_extra = {
+            "example": {
+                "id": 1,
+                "user_id": "user_123",
+                "title": "Buy groceries",
+                "description": "Milk, eggs, bread",
+                "is_completed": False,
+                "created_at": "2026-02-08T10:30:00Z",
+                "updated_at": "2026-02-08T10:30:00Z"
+            }
+        }
 ```
 
 ---
 
-## Query Patterns
+## Relationships
 
-### User Queries
+### Task → User (Many-to-One)
 
-**Signup (Create User)**:
-```sql
-INSERT INTO users (id, email, hashed_password, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?)
-```
+- Each task belongs to exactly one user
+- User is identified by `user_id` field
+- User information comes from authentication system (not stored in this database)
 
-**Signin (Find User by Email)**:
-```sql
-SELECT id, email, hashed_password, created_at, updated_at
-FROM users
-WHERE email = ?
-```
-
-### Task Queries (All filtered by user_id)
-
-**List All Tasks for User**:
-```sql
-SELECT id, user_id, title, description, is_complete, created_at, updated_at
-FROM tasks
-WHERE user_id = ?
-ORDER BY created_at DESC
-```
-
-**List Tasks by Completion Status**:
-```sql
-SELECT id, user_id, title, description, is_complete, created_at, updated_at
-FROM tasks
-WHERE user_id = ? AND is_complete = ?
-ORDER BY created_at DESC
-```
-
-**Create Task**:
-```sql
-INSERT INTO tasks (id, user_id, title, description, is_complete, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-```
-
-**Get Single Task**:
-```sql
-SELECT id, user_id, title, description, is_complete, created_at, updated_at
-FROM tasks
-WHERE id = ? AND user_id = ?
-```
-
-**Update Task**:
-```sql
-UPDATE tasks
-SET title = ?, description = ?, updated_at = ?
-WHERE id = ? AND user_id = ?
-```
-
-**Toggle Task Completion**:
-```sql
-UPDATE tasks
-SET is_complete = NOT is_complete, updated_at = ?
-WHERE id = ? AND user_id = ?
-```
-
-**Delete Task**:
-```sql
-DELETE FROM tasks
-WHERE id = ? AND user_id = ?
-```
-
-**Critical**: All task queries include `user_id` filter to enforce data isolation.
+**Note**: The User entity is managed by the authentication system (Better Auth). This backend only stores the user_id reference for ownership tracking.
 
 ---
 
-## Migration Strategy
+## Data Validation Rules
 
-**Initial Schema Creation**:
-1. Create `users` table with indexes
-2. Create `tasks` table with foreign key constraint and indexes
-3. No seed data required (users register via signup endpoint)
+### Title Validation
+- **Required**: Cannot be null or empty
+- **Length**: 1-200 characters
+- **Whitespace**: Leading/trailing whitespace trimmed
+- **Content**: Cannot be only whitespace
 
-**Schema Evolution**:
-- Use Alembic for future migrations if schema changes are needed
-- Preserve data isolation constraints in all migrations
-- Test migrations against Neon PostgreSQL before applying to production
+### Description Validation
+- **Optional**: Can be null
+- **Length**: 0-2000 characters if provided
+- **Whitespace**: Preserved (not trimmed)
+
+### Completion Status
+- **Type**: Boolean
+- **Default**: False (new tasks are incomplete)
+- **Toggle**: Can be changed between true/false
+
+### User ID
+- **Required**: Cannot be null
+- **Source**: Extracted from JWT token only
+- **Immutable**: Cannot be changed after task creation
+
+### Timestamps
+- **Auto-generated**: Set automatically on creation
+- **Auto-updated**: `updated_at` refreshed on every modification
+- **Timezone**: UTC for consistency
+
+---
+
+## Database Migration
+
+### Initial Migration (Alembic)
+
+```python
+"""Create tasks table
+
+Revision ID: 001_create_tasks
+Revises:
+Create Date: 2026-02-08
+"""
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+def upgrade():
+    op.create_table(
+        'tasks',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.String(), nullable=False),
+        sa.Column('title', sa.String(length=200), nullable=False),
+        sa.Column('description', sa.String(length=2000), nullable=True),
+        sa.Column('is_completed', sa.Boolean(), nullable=False, server_default='false'),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('now()')),
+        sa.PrimaryKeyConstraint('id')
+    )
+
+    # Create indexes
+    op.create_index('idx_tasks_user_id', 'tasks', ['user_id'])
+    op.create_index('idx_tasks_user_id_created_at', 'tasks', ['user_id', 'created_at'])
+
+def downgrade():
+    op.drop_index('idx_tasks_user_id_created_at', table_name='tasks')
+    op.drop_index('idx_tasks_user_id', table_name='tasks')
+    op.drop_table('tasks')
+```
+
+---
+
+## Data Isolation Enforcement
+
+### Query Patterns
+
+**Always filter by user_id**:
+```python
+# List all tasks for user
+tasks = await db.execute(
+    select(Task).where(Task.user_id == current_user_id)
+)
+
+# Get single task with ownership check
+task = await db.execute(
+    select(Task).where(
+        Task.id == task_id,
+        Task.user_id == current_user_id
+    )
+)
+
+# Update task with ownership check
+await db.execute(
+    update(Task)
+    .where(Task.id == task_id, Task.user_id == current_user_id)
+    .values(title="Updated title")
+)
+
+# Delete task with ownership check
+await db.execute(
+    delete(Task)
+    .where(Task.id == task_id, Task.user_id == current_user_id)
+)
+```
+
+**Never**:
+- Query tasks without user_id filter
+- Accept user_id from request body or URL parameters
+- Allow cross-user task access
 
 ---
 
 ## Performance Considerations
 
-**Indexes**:
-- `users.email` index: Fast signin lookups
-- `tasks.user_id` index: Fast task list queries
-- `tasks.(user_id, created_at)` composite index: Optimized sorted list queries
-- `tasks.(user_id, is_complete)` composite index: Optimized filtered queries
+### Query Optimization
+- Use indexes on `user_id` for fast filtering
+- Composite index on `(user_id, created_at)` for sorted lists
+- Limit result sets for large task lists (pagination)
 
-**Query Optimization**:
-- All task queries use indexed `user_id` column
-- Limit result sets if task count grows large (pagination not required for MVP)
-- Use connection pooling to reduce latency
+### Connection Pooling
+- Pool size: 5-10 connections
+- Reuse connections for multiple queries
+- Pre-ping to verify connection health
 
-**Scalability**:
-- UUID primary keys enable distributed ID generation
-- No sequential IDs that could leak user/task counts
-- Foreign key constraints maintain referential integrity
+### Async Operations
+- Use async/await for all database operations
+- Non-blocking I/O improves concurrency
+- Critical for handling 100+ concurrent users
+
+---
+
+## Testing Considerations
+
+### Test Data
+```python
+# Test user IDs
+USER_A_ID = "test_user_a"
+USER_B_ID = "test_user_b"
+
+# Test tasks
+task_a1 = Task(user_id=USER_A_ID, title="User A Task 1")
+task_a2 = Task(user_id=USER_A_ID, title="User A Task 2")
+task_b1 = Task(user_id=USER_B_ID, title="User B Task 1")
+```
+
+### Isolation Tests
+- Verify User A cannot access User B's tasks
+- Verify queries filter by user_id correctly
+- Verify concurrent operations don't leak data
+
+---
+
+## Summary
+
+The Task data model provides:
+- ✅ User ownership tracking via `user_id`
+- ✅ Complete CRUD support
+- ✅ Data isolation at query level
+- ✅ Automatic timestamp management
+- ✅ Validation rules for data integrity
+- ✅ Optimized indexes for performance
+- ✅ Pydantic schemas for API contracts

@@ -1,205 +1,327 @@
-# Research: Multi-User Todo Full-Stack Web Application
+# Research: Backend API & Database Technology Decisions
 
-**Feature**: 002-multi-user-todo-app
+**Feature**: Backend API & Database (Task Management Core)
 **Date**: 2026-02-08
-**Purpose**: Resolve technical unknowns and document architectural decisions
+**Phase**: Phase 0 - Research & Technology Decisions
 
-## Research Questions
+## Overview
 
-### 1. Testing Strategy
+This document consolidates research findings for implementing a secure, multi-user REST API with FastAPI, SQLModel, and Neon Serverless PostgreSQL. All decisions prioritize security, data isolation, and alignment with the project constitution.
 
-**Question**: What testing approach should be used for this project?
+---
 
-**Context**: The feature specification does not explicitly require tests. The tasks template indicates tests are optional unless explicitly requested. However, the constitution emphasizes reproducibility and quality.
+## 1. FastAPI JWT Authentication Patterns
 
-**Decision**: Manual testing and validation only (no automated test suite)
+### Decision: Dependency Injection with `get_current_user`
+
+**Implementation Pattern**:
+```python
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
+
+security = HTTPBearer()
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> str:
+    """Extract and verify JWT, return user_id"""
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(
+            token,
+            settings.BETTER_AUTH_SECRET,
+            algorithms=[settings.JWT_ALGORITHM]
+        )
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user_id
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+```
+
+**Usage in Routes**:
+```python
+@router.get("/tasks")
+async def list_tasks(
+    user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    tasks = db.query(Task).filter(Task.user_id == user_id).all()
+    return tasks
+```
 
 **Rationale**:
-- The feature specification does not include testing requirements in the functional requirements (FR-001 through FR-020)
-- Success criteria (SC-001 through SC-010) focus on functional outcomes and user experience, not test coverage
-- The constitution's spec-driven principle states "All functionality MUST be derived strictly from written specifications" - since tests are not specified, they should not be implemented
-- The tasks template explicitly states: "Tests are OPTIONAL - only include them if explicitly requested in the feature specification"
-- Manual validation against acceptance scenarios in the spec is sufficient for hackathon evaluation
-- Focus should be on demonstrating the agentic development workflow, not test automation
+- FastAPI's dependency injection system automatically handles authentication
+- Centralizes JWT verification logic (DRY principle)
+- Automatically returns 401 for invalid/missing tokens
+- Makes user_id available to all route handlers
+- Easy to test by mocking the dependency
 
 **Alternatives Considered**:
-1. **Full test suite (unit + integration + E2E)**: Rejected because tests are not specified in requirements and would violate spec-driven principle by adding undocumented functionality
-2. **Minimal unit tests only**: Rejected for same reason - not specified in requirements
-3. **Contract tests only**: Rejected - while API contracts will be documented, automated contract tests are not required by spec
+- **Middleware**: More complex, harder to test individual routes, less granular control
+- **Manual verification in each route**: Violates DRY, error-prone, inconsistent error handling
+- **Decorator pattern**: Less idiomatic in FastAPI, doesn't integrate with OpenAPI docs
 
-**Implementation Impact**:
-- No test files or test frameworks needed
-- Validation will be manual against acceptance scenarios
-- Focus development effort on core functionality specified in requirements
-
----
-
-## Technology Decisions
-
-### 2. Better Auth Configuration
-
-**Question**: How should Better Auth be configured for JWT token issuance in Next.js?
-
-**Decision**: Use Better Auth with JWT plugin, configured for stateless authentication
-
-**Rationale**:
-- Constitution mandates Better Auth with JWT-based authentication
-- Better Auth provides built-in JWT plugin for token issuance
-- Stateless JWT tokens align with serverless architecture (Neon PostgreSQL)
-- Shared secret (BETTER_AUTH_SECRET) enables backend verification without database lookups
-
-**Configuration Approach**:
-- Install `better-auth` package in Next.js frontend
-- Enable JWT plugin in Better Auth configuration
-- Configure token expiration (1 hour access token recommended)
-- Store tokens in httpOnly cookies for security
-- Share BETTER_AUTH_SECRET between frontend and backend via environment variables
-
-**References**:
-- Better Auth documentation: JWT plugin configuration
-- Constitution: Authentication Requirements section
+**Implementation Guidance**:
+1. Create `app/core/security.py` with JWT verification logic
+2. Create `app/api/deps.py` with `get_current_user` dependency
+3. Use `Depends(get_current_user)` in all protected route handlers
+4. Configure HTTPBearer security scheme for OpenAPI documentation
 
 ---
 
-### 3. FastAPI JWT Verification
+## 2. SQLModel with Neon PostgreSQL
 
-**Question**: How should FastAPI verify JWT tokens issued by Better Auth?
+### Decision: Async SQLAlchemy Engine with Connection Pooling
 
-**Decision**: Use python-jose library with shared secret verification
+**Connection Configuration**:
+```python
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
 
-**Rationale**:
-- python-jose is the standard JWT library for Python/FastAPI
-- Supports HS256 algorithm (HMAC with SHA-256) for symmetric key verification
-- Shared secret approach (BETTER_AUTH_SECRET) enables stateless verification
-- No database lookup required for token validation (performance benefit)
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=False,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=3600,
+    pool_pre_ping=True,
+)
 
-**Implementation Approach**:
-- Install `python-jose[cryptography]` package
-- Create JWT verification dependency in `backend/src/api/deps.py`
-- Extract token from Authorization header (Bearer scheme)
-- Verify signature using BETTER_AUTH_SECRET
-- Decode token to extract user_id claim
-- Inject authenticated user_id into route handlers
-
-**Error Handling**:
-- Invalid signature → HTTP 401 Unauthorized
-- Expired token → HTTP 401 Unauthorized
-- Missing token → HTTP 401 Unauthorized
-- Malformed token → HTTP 401 Unauthorized
-
----
-
-### 4. Neon PostgreSQL Connection Management
-
-**Question**: How should the application connect to Neon Serverless PostgreSQL?
-
-**Decision**: Use asyncpg driver with SQLModel, connection pooling enabled
-
-**Rationale**:
-- Neon requires PostgreSQL-compatible drivers
-- asyncpg is the recommended async driver for Python
-- SQLModel supports asyncpg through SQLAlchemy async engine
-- Connection pooling reduces latency for serverless cold starts
-- Async/await patterns align with FastAPI's async capabilities
-
-**Configuration Approach**:
-- Install `asyncpg` and `sqlmodel` packages
-- Create async engine with Neon connection string (DATABASE_URL)
-- Configure connection pool (min: 1, max: 10 connections)
-- Use async session management for database operations
-- Enable SSL mode for secure connections
-
-**Connection String Format**:
-```
-postgresql+asyncpg://user:password@host/database?ssl=require
+async_session = sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
 ```
 
+**Rationale**:
+- **Async operations**: Improves concurrency for I/O-bound operations
+- **Pool size (5-10)**: Balances connection reuse with resource efficiency in serverless
+- **Max overflow (10)**: Handles traffic spikes without exhausting connections
+- **Pool recycle (3600s)**: Prevents stale connections in Neon's serverless environment
+- **Pool pre-ping (True)**: Verifies connection health before use, prevents errors
+
+**Neon-Specific Considerations**:
+- Neon serverless automatically scales compute, but connections are limited
+- Connection pooling reduces overhead of establishing new connections
+- Pre-ping is critical because Neon may recycle idle connections
+- Use `postgresql+asyncpg` driver for best async performance
+
+**Alternatives Considered**:
+- **Synchronous SQLAlchemy**: Simpler but blocks on I/O, poor concurrency
+- **No pooling**: High connection overhead, poor performance
+- **Large pool (50+)**: Wastes resources, may exceed Neon connection limits
+
+**Implementation Guidance**:
+1. Install dependencies: `sqlalchemy[asyncio]`, `asyncpg`, `sqlmodel`
+2. Create `app/database.py` with async engine and session factory
+3. Use async context managers for database sessions
+4. Implement `get_db` dependency for route handlers
+5. Use `await` for all database operations
+
+**Migration Strategy**:
+- Use Alembic for schema migrations
+- Configure Alembic for async operations
+- Initial migration creates `tasks` table with indexes
+- Ensure migrations preserve data isolation constraints (user_id NOT NULL)
+
 ---
 
-### 5. Password Hashing
+## 3. Data Isolation Patterns
 
-**Question**: Which password hashing algorithm should be used?
+### Decision: Query-Level Filtering with User ID
 
-**Decision**: Use passlib with bcrypt algorithm
+**Pattern Implementation**:
+```python
+# Always filter by user_id from JWT
+async def get_user_tasks(db: AsyncSession, user_id: str):
+    result = await db.execute(
+        select(Task).where(Task.user_id == user_id)
+    )
+    return result.scalars().all()
+
+# Ownership verification for single task
+async def get_user_task(db: AsyncSession, task_id: int, user_id: str):
+    result = await db.execute(
+        select(Task).where(
+            Task.id == task_id,
+            Task.user_id == user_id
+        )
+    )
+    task = result.scalar_one_or_none()
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+```
 
 **Rationale**:
-- Constitution assumption: "Password hashing uses industry-standard algorithms (e.g., bcrypt, argon2)"
-- bcrypt is widely adopted, well-tested, and secure
-- passlib provides a high-level interface for bcrypt
-- Configurable work factor for future-proofing against hardware improvements
+- **Query-level enforcement**: Data isolation guaranteed at database level
+- **Explicit filtering**: Every query includes `user_id` filter
+- **No implicit access**: Missing user_id filter causes query to fail
+- **404 for unauthorized**: Returns "not found" instead of "forbidden" to prevent information leakage
 
-**Implementation Approach**:
-- Install `passlib[bcrypt]` package
-- Create password hashing utilities in `backend/src/core/security.py`
-- Use bcrypt with work factor of 12 (industry standard)
-- Hash passwords before storing in database
-- Verify passwords during signin using constant-time comparison
+**Index Optimization**:
+```sql
+CREATE INDEX idx_tasks_user_id ON tasks(user_id);
+CREATE INDEX idx_tasks_user_id_created_at ON tasks(user_id, created_at DESC);
+```
+
+**Rationale for Indexes**:
+- `user_id` index: Speeds up all user-scoped queries
+- Composite index: Optimizes task list retrieval with sorting
+- Neon benefits from indexes due to serverless compute scaling
+
+**Preventing N+1 Queries**:
+- Use `selectinload()` or `joinedload()` for relationships (if added later)
+- Batch operations when possible
+- Monitor query performance with logging
+
+**Alternatives Considered**:
+- **Row-level security (RLS)**: PostgreSQL feature, but adds complexity and requires database-level user context
+- **Application-level filtering after fetch**: Insecure, data leakage risk
+- **Separate databases per user**: Over-engineering, poor resource utilization
+
+**Implementation Guidance**:
+1. Always include `user_id` in WHERE clauses
+2. Create database indexes on `user_id` columns
+3. Return 404 (not 403) for unauthorized access to prevent enumeration
+4. Write integration tests verifying data isolation
+5. Use database transactions for consistency
 
 ---
 
-### 6. API Endpoint Design
+## 4. API Error Handling
 
-**Question**: What REST API endpoints are needed to support the 5 user stories?
+### Decision: FastAPI HTTPException with Standardized Format
 
-**Decision**: 8 RESTful endpoints following standard HTTP semantics
+**Error Response Format**:
+```python
+from fastapi import HTTPException
 
-**Endpoints**:
+# Authentication error
+raise HTTPException(
+    status_code=401,
+    detail="Invalid or expired token"
+)
 
-**Authentication (User Story 1 - P1)**:
-- `POST /api/auth/signup` - Create new user account
-- `POST /api/auth/signin` - Authenticate user and issue JWT token
+# Authorization error (ownership check failed)
+raise HTTPException(
+    status_code=404,  # Use 404 to prevent enumeration
+    detail="Task not found"
+)
 
-**Task Management (User Stories 2-5 - P2-P5)**:
-- `GET /api/tasks` - List all tasks for authenticated user (with optional filter: ?status=complete|incomplete|all)
-- `POST /api/tasks` - Create new task for authenticated user
-- `GET /api/tasks/{task_id}` - Get single task by ID (ownership verified)
-- `PUT /api/tasks/{task_id}` - Update task title/description (ownership verified)
-- `PATCH /api/tasks/{task_id}/complete` - Toggle task completion status (ownership verified)
-- `DELETE /api/tasks/{task_id}` - Delete task (ownership verified)
+# Validation error (handled automatically by Pydantic)
+# Returns 422 with detailed validation errors
+
+# Server error
+raise HTTPException(
+    status_code=500,
+    detail="Internal server error"
+)
+```
+
+**HTTP Status Code Conventions**:
+- **200 OK**: Successful GET, PUT requests
+- **201 Created**: Successful POST (resource created)
+- **204 No Content**: Successful DELETE
+- **400 Bad Request**: Malformed request (custom validation)
+- **401 Unauthorized**: Missing or invalid authentication
+- **403 Forbidden**: Authenticated but not authorized (avoid using, use 404 instead)
+- **404 Not Found**: Resource doesn't exist OR user doesn't own it
+- **422 Unprocessable Entity**: Pydantic validation errors
+- **500 Internal Server Error**: Unexpected server errors
 
 **Rationale**:
-- Follows REST conventions (GET for read, POST for create, PUT for full update, PATCH for partial update, DELETE for remove)
-- Separate PATCH endpoint for completion toggle (common operation, deserves dedicated endpoint)
-- Query parameter for filtering (GET /api/tasks?status=complete) supports User Story 4 requirement
-- All task endpoints require authentication (JWT token in Authorization header)
-- All task endpoints enforce ownership at query level (user_id filter)
+- **FastAPI HTTPException**: Built-in, consistent, integrates with OpenAPI
+- **404 for ownership failures**: Prevents information leakage (can't enumerate other users' tasks)
+- **Pydantic validation**: Automatic, detailed error messages for request validation
+- **Consistent format**: All errors return `{"detail": "message"}` structure
+
+**Validation Error Handling**:
+```python
+from pydantic import BaseModel, Field, validator
+
+class TaskCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(None, max_length=2000)
+    is_completed: bool = False
+
+    @validator('title')
+    def title_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Title cannot be empty or whitespace')
+        return v.strip()
+```
+
+**Rationale for Pydantic Validation**:
+- Automatic validation before route handler executes
+- Returns 422 with detailed field-level errors
+- Type coercion and conversion
+- Self-documenting (appears in OpenAPI schema)
+
+**Alternatives Considered**:
+- **Custom error classes**: Over-engineering, FastAPI HTTPException sufficient
+- **403 for ownership failures**: Reveals information about resource existence
+- **Manual validation**: Error-prone, inconsistent, verbose
+
+**Implementation Guidance**:
+1. Use FastAPI HTTPException for all errors
+2. Return 404 (not 403) for ownership check failures
+3. Use Pydantic models with Field validators for request validation
+4. Log errors for monitoring (but don't expose internal details to clients)
+5. Use exception handlers for unexpected errors (500)
+
+**Global Exception Handler** (optional):
+```python
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # Log the error
+    logger.error(f"Unexpected error: {exc}", exc_info=True)
+    # Return generic error to client
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
+```
 
 ---
 
-### 7. Frontend Routing Strategy
+## Summary of Key Decisions
 
-**Question**: How should Next.js App Router be structured for authentication flows?
-
-**Decision**: Use middleware-based route protection with Better Auth session checking
-
-**Route Structure**:
-- `/` - Public landing page
-- `/signup` - Public signup page
-- `/signin` - Public signin page
-- `/tasks` - Protected task list page (requires authentication)
-
-**Protection Approach**:
-- Create Next.js middleware to check Better Auth session
-- Redirect unauthenticated users from `/tasks` to `/signin`
-- Redirect authenticated users from `/signin` or `/signup` to `/tasks`
-- Use Better Auth's session management hooks in components
-
-**Rationale**:
-- Middleware-based protection is the recommended approach for Next.js App Router
-- Centralized authentication logic (DRY principle)
-- Better user experience (automatic redirects)
-- Aligns with constitution's security-first architecture
+| Area | Decision | Rationale |
+|------|----------|-----------|
+| **Authentication** | FastAPI dependency injection with `get_current_user` | Centralized, testable, idiomatic FastAPI pattern |
+| **Database** | Async SQLAlchemy with connection pooling (5-10 connections) | Optimized for Neon serverless, improves concurrency |
+| **Data Isolation** | Query-level filtering with user_id in WHERE clauses | Guaranteed isolation at database level, prevents leakage |
+| **Error Handling** | FastAPI HTTPException with 404 for ownership failures | Consistent format, prevents information enumeration |
+| **Validation** | Pydantic models with Field validators | Automatic, detailed errors, self-documenting |
+| **Indexes** | user_id and composite (user_id, created_at) indexes | Optimizes user-scoped queries, critical for performance |
 
 ---
 
-## Summary
+## Implementation Checklist
 
-All technical unknowns resolved. Key decisions:
-1. **Testing**: Manual validation only (no automated tests per spec-driven principle)
-2. **Authentication**: Better Auth with JWT plugin, python-jose for backend verification
-3. **Database**: asyncpg + SQLModel with connection pooling for Neon PostgreSQL
-4. **Security**: bcrypt password hashing, stateless JWT verification
-5. **API Design**: 8 RESTful endpoints with standard HTTP semantics
-6. **Frontend**: Middleware-based route protection with Better Auth
+- [ ] Install dependencies: fastapi, sqlmodel, asyncpg, python-jose, pydantic
+- [ ] Configure async SQLAlchemy engine with connection pooling
+- [ ] Implement `get_current_user` dependency for JWT verification
+- [ ] Create Task SQLModel with user_id foreign key
+- [ ] Add database indexes on user_id columns
+- [ ] Implement query-level filtering in all database operations
+- [ ] Use HTTPException with appropriate status codes
+- [ ] Return 404 (not 403) for ownership check failures
+- [ ] Write integration tests for data isolation
+- [ ] Configure Alembic for database migrations
 
-Ready to proceed to Phase 1: Design & Contracts.
+---
+
+## References
+
+- FastAPI Security: https://fastapi.tiangolo.com/tutorial/security/
+- SQLModel Documentation: https://sqlmodel.tiangolo.com/
+- Neon Serverless PostgreSQL: https://neon.tech/docs/
+- JWT Best Practices: https://tools.ietf.org/html/rfc8725
+- REST API Status Codes: https://www.rfc-editor.org/rfc/rfc7231

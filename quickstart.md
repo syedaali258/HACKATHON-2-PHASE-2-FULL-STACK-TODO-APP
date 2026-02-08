@@ -1,436 +1,448 @@
-# Quickstart Guide: Multi-User Todo Full-Stack Web Application
+# Quickstart Guide: Backend API & Database
 
-**Feature**: 002-multi-user-todo-app
+**Feature**: Backend API & Database (Task Management Core)
 **Date**: 2026-02-08
-**Purpose**: Step-by-step guide for setting up and running the application
+**Phase**: Phase 1 - Design & Contracts
+
+## Overview
+
+This guide helps you set up and run the FastAPI backend for the task management system. The backend provides secure, JWT-authenticated REST API endpoints with persistent storage in Neon Serverless PostgreSQL.
+
+---
 
 ## Prerequisites
 
-- Python 3.11+ installed
-- Node.js 18+ and npm installed
-- Neon PostgreSQL database account (free tier available at neon.tech)
-- Git installed
+- **Python**: 3.11 or higher
+- **Neon PostgreSQL**: Account and database created at [neon.tech](https://neon.tech)
+- **Better Auth**: Authentication system configured and issuing JWT tokens
+- **Git**: For version control
+- **Code Editor**: VS Code, PyCharm, or similar
 
-## Environment Setup
+---
+
+## Initial Setup
 
 ### 1. Clone Repository
 
 ```bash
-git clone <repository-url>
 cd HACKATHON-PHASE-2
-git checkout 002-multi-user-todo-app
 ```
 
-### 2. Create Environment Variables
+### 2. Create Virtual Environment
 
-Create a `.env` file in the project root:
+**Windows (PowerShell)**:
+```powershell
+cd backend
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+```
 
+**macOS/Linux**:
 ```bash
-# Shared JWT Secret (generate a secure random string)
-BETTER_AUTH_SECRET=your-super-secret-jwt-key-min-32-chars
-
-# Neon PostgreSQL Connection
-DATABASE_URL=postgresql+asyncpg://user:password@host/database?ssl=require
-
-# Backend Configuration
-BACKEND_PORT=8000
-BACKEND_HOST=0.0.0.0
-
-# Frontend Configuration
-NEXT_PUBLIC_API_URL=http://localhost:8000
+cd backend
+python3 -m venv venv
+source venv/bin/activate
 ```
 
-**Generate JWT Secret**:
+### 3. Install Dependencies
+
+Create `backend/requirements.txt`:
+```txt
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+sqlmodel==0.0.14
+asyncpg==0.29.0
+pydantic==2.5.3
+python-jose[cryptography]==3.3.0
+python-dotenv==1.0.0
+alembic==1.13.1
+pytest==7.4.4
+pytest-asyncio==0.23.3
+httpx==0.26.0
+```
+
+Install:
 ```bash
-# Using Python
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-
-# Using OpenSSL
-openssl rand -base64 32
+pip install -r requirements.txt
 ```
 
-**Get Neon Database URL**:
-1. Sign up at https://neon.tech
-2. Create a new project
+### 4. Configure Environment Variables
+
+Create `backend/.env`:
+```env
+# Database
+DATABASE_URL=postgresql+asyncpg://user:password@ep-xxx.neon.tech/dbname?sslmode=require
+
+# JWT Authentication
+BETTER_AUTH_SECRET=your-secret-key-here
+JWT_ALGORITHM=HS256
+
+# Application
+ENVIRONMENT=development
+DEBUG=true
+```
+
+**Important**:
+- Replace `DATABASE_URL` with your Neon PostgreSQL connection string
+- Replace `BETTER_AUTH_SECRET` with the same secret used by Better Auth
+- Never commit `.env` to version control
+
+Create `backend/.env.example` (for documentation):
+```env
+DATABASE_URL=postgresql+asyncpg://user:password@host/dbname
+BETTER_AUTH_SECRET=your-secret-key
+JWT_ALGORITHM=HS256
+ENVIRONMENT=development
+DEBUG=true
+```
+
+---
+
+## Project Structure
+
+```
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # FastAPI application entry point
+│   ├── config.py            # Configuration and environment variables
+│   ├── database.py          # Database connection and session management
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── task.py          # SQLModel Task entity
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   └── task.py          # Pydantic request/response schemas
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── deps.py          # Dependency injection (JWT verification)
+│   │   └── routes/
+│   │       ├── __init__.py
+│   │       └── tasks.py     # Task CRUD endpoints
+│   └── core/
+│       ├── __init__.py
+│       └── security.py      # JWT verification utilities
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py          # Pytest fixtures
+│   ├── test_auth.py         # Authentication tests
+│   ├── test_tasks.py        # Task CRUD tests
+│   └── test_isolation.py    # Data isolation tests
+├── alembic/                 # Database migrations
+├── requirements.txt         # Python dependencies
+├── .env                     # Environment variables (not in git)
+├── .env.example             # Environment template
+└── README.md                # Backend documentation
+```
+
+---
+
+## Database Setup
+
+### 1. Get Neon Connection String
+
+1. Log in to [Neon Console](https://console.neon.tech)
+2. Select your project
 3. Copy the connection string from the dashboard
 4. Replace `postgresql://` with `postgresql+asyncpg://` for async support
-5. Ensure `?ssl=require` is appended
+5. Add to `.env` as `DATABASE_URL`
 
-### 3. Backend Setup
+### 2. Initialize Database
 
-```bash
-cd backend
+The database tables will be created automatically when you run the application for the first time (using SQLModel's `create_all`).
 
-# Create virtual environment
-python -m venv venv
-
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
-
-# Install dependencies
-pip install fastapi uvicorn sqlmodel asyncpg python-jose[cryptography] passlib[bcrypt] python-multipart
-
-# Create requirements.txt
-pip freeze > requirements.txt
-```
-
-### 4. Frontend Setup
+**For production**, use Alembic migrations:
 
 ```bash
-cd frontend
+# Initialize Alembic (first time only)
+alembic init alembic
 
-# Install dependencies
-npm install next@latest react@latest react-dom@latest
-npm install better-auth
-npm install -D typescript @types/node @types/react @types/react-dom
-npm install -D tailwindcss postcss autoprefixer
-npx tailwindcss init -p
+# Create migration
+alembic revision --autogenerate -m "Create tasks table"
 
-# Create TypeScript config
-npx tsc --init
+# Apply migration
+alembic upgrade head
 ```
 
-## Database Initialization
-
-### 1. Create Database Tables
-
-The application will automatically create tables on first run using SQLModel's `create_all()` method.
-
-Alternatively, run this Python script to initialize the database:
-
-```python
-# backend/init_db.py
-import asyncio
-from sqlmodel import SQLModel
-from src.core.database import engine
-
-async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
-    print("Database tables created successfully!")
-
-if __name__ == "__main__":
-    asyncio.run(init_db())
-```
-
-Run:
-```bash
-cd backend
-python init_db.py
-```
-
-### 2. Verify Tables
-
-Connect to your Neon database and verify tables exist:
-- `users` table with columns: id, email, hashed_password, created_at, updated_at
-- `tasks` table with columns: id, user_id, title, description, is_complete, created_at, updated_at
+---
 
 ## Running the Application
 
-### 1. Start Backend Server
+### Development Server
 
 ```bash
 cd backend
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-
-# Run with uvicorn
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Backend will be available at: http://localhost:8000
+**Options**:
+- `--reload`: Auto-reload on code changes
+- `--host 0.0.0.0`: Accept connections from any IP
+- `--port 8000`: Run on port 8000
 
-**Verify Backend**:
-- Visit http://localhost:8000/docs for interactive API documentation (Swagger UI)
-- Visit http://localhost:8000/redoc for alternative API documentation
-
-### 2. Start Frontend Server
-
-Open a new terminal:
-
-```bash
-cd frontend
-
-# Run development server
-npm run dev
+**Output**:
+```
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [12345] using StatReload
+INFO:     Started server process [12346]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
 ```
 
-Frontend will be available at: http://localhost:3000
+### Verify Server is Running
 
-## Testing the Application
+Open browser to: http://localhost:8000/docs
 
-### 1. User Registration Flow
+You should see the FastAPI interactive API documentation (Swagger UI).
 
-1. Navigate to http://localhost:3000
-2. Click "Sign Up" or navigate to http://localhost:3000/signup
-3. Enter email and password (minimum 8 characters)
-4. Submit form
-5. You should be automatically signed in and redirected to /tasks
+---
 
-**Expected Behavior**:
-- Account created in database
-- JWT token issued and stored
-- Redirected to task list page
+## Testing the API
 
-### 2. User Sign In Flow
+### 1. Get a JWT Token
 
-1. Navigate to http://localhost:3000/signin
-2. Enter registered email and password
-3. Submit form
-4. You should be signed in and redirected to /tasks
+**Option A**: Use Better Auth to authenticate and get a token
 
-**Expected Behavior**:
-- Credentials verified against database
-- JWT token issued and stored
-- Redirected to task list page
+**Option B**: For testing, create a test token:
 
-### 3. Task Management Flow
+```python
+from jose import jwt
+from datetime import datetime, timedelta
 
-**Create Task**:
-1. On /tasks page, find the "Create Task" form
-2. Enter task title (required)
-3. Optionally enter description
-4. Submit form
-5. Task should appear in the list immediately
-
-**View Tasks**:
-1. All your tasks are displayed on /tasks page
-2. Tasks are sorted by creation date (newest first)
-3. Use filter dropdown to show: All, Complete, or Incomplete tasks
-
-**Update Task**:
-1. Click "Edit" button on a task
-2. Modify title or description
-3. Submit changes
-4. Task should update immediately in the list
-
-**Mark Complete/Incomplete**:
-1. Click checkbox or "Complete" button on a task
-2. Task status should toggle
-3. Visual distinction should appear (e.g., strikethrough for completed tasks)
-
-**Delete Task**:
-1. Click "Delete" button on a task
-2. Confirm deletion (if confirmation dialog implemented)
-3. Task should be removed from the list immediately
-
-### 4. Data Isolation Testing
-
-**Critical Security Test**:
-
-1. Create Account A (user1@example.com)
-2. Sign in as Account A
-3. Create several tasks
-4. Sign out
-5. Create Account B (user2@example.com)
-6. Sign in as Account B
-7. Verify you see NO tasks from Account A
-8. Create tasks as Account B
-9. Sign out and sign back in as Account A
-10. Verify you still see only Account A's tasks
-
-**Expected Behavior**:
-- Each user sees only their own tasks
-- No cross-user data leakage
-- Task counts are independent per user
-
-### 5. Authentication Testing
-
-**Test Unauthorized Access**:
-
-1. Sign out (clear JWT token)
-2. Try to access http://localhost:3000/tasks directly
-3. You should be redirected to /signin
-
-**Test Token Expiration** (if implemented):
-
-1. Sign in
-2. Wait for token to expire (1 hour if using recommended settings)
-3. Try to perform any task operation
-4. You should be prompted to sign in again
-
-## API Testing with cURL
-
-### Signup
-
-```bash
-curl -X POST http://localhost:8000/api/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"SecurePass123"}'
+secret = "your-secret-key"
+payload = {
+    "sub": "test_user_123",  # user_id
+    "exp": datetime.utcnow() + timedelta(hours=1)
+}
+token = jwt.encode(payload, secret, algorithm="HS256")
+print(token)
 ```
 
-### Signin
+### 2. Test Endpoints with curl
 
-```bash
-curl -X POST http://localhost:8000/api/auth/signin \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"SecurePass123"}'
-```
-
-Save the token from the response.
-
-### Create Task
-
+**Create a task**:
 ```bash
 curl -X POST http://localhost:8000/api/tasks \
-  -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -d '{"title":"Test Task","description":"This is a test"}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Buy groceries",
+    "description": "Milk, eggs, bread",
+    "is_completed": false
+  }'
 ```
 
-### List Tasks
-
+**List all tasks**:
 ```bash
 curl -X GET http://localhost:8000/api/tasks \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
-### Update Task
-
+**Get a single task**:
 ```bash
-curl -X PUT http://localhost:8000/api/tasks/TASK_ID \
-  -H "Content-Type: application/json" \
+curl -X GET http://localhost:8000/api/tasks/1 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+**Update a task**:
+```bash
+curl -X PUT http://localhost:8000/api/tasks/1 \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -d '{"title":"Updated Task","description":"Updated description"}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Buy groceries and cook dinner",
+    "is_completed": true
+  }'
 ```
 
-### Toggle Complete
-
+**Delete a task**:
 ```bash
-curl -X PATCH http://localhost:8000/api/tasks/TASK_ID/complete \
+curl -X DELETE http://localhost:8000/api/tasks/1 \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
-### Delete Task
+### 3. Test with Swagger UI
+
+1. Open http://localhost:8000/docs
+2. Click "Authorize" button
+3. Enter: `Bearer YOUR_JWT_TOKEN`
+4. Click "Authorize"
+5. Try any endpoint by clicking "Try it out"
+
+---
+
+## Running Tests
+
+### Run All Tests
 
 ```bash
-curl -X DELETE http://localhost:8000/api/tasks/TASK_ID \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+cd backend
+pytest
 ```
 
-## Troubleshooting
+### Run Specific Test Files
 
-### Backend Issues
+```bash
+# Authentication tests
+pytest tests/test_auth.py
 
-**Database Connection Error**:
-- Verify DATABASE_URL is correct
-- Check Neon dashboard for connection string
-- Ensure `?ssl=require` is appended
-- Verify network connectivity to Neon
+# Task CRUD tests
+pytest tests/test_tasks.py
 
-**JWT Verification Error**:
-- Ensure BETTER_AUTH_SECRET is the same in frontend and backend
-- Verify token is being sent in Authorization header
+# Data isolation tests
+pytest tests/test_isolation.py
+```
+
+### Run with Coverage
+
+```bash
+pytest --cov=app --cov-report=html
+```
+
+View coverage report: `open htmlcov/index.html`
+
+### Test Output Example
+
+```
+============================= test session starts ==============================
+collected 15 items
+
+tests/test_auth.py ....                                                  [ 26%]
+tests/test_tasks.py .......                                              [ 73%]
+tests/test_isolation.py ....                                             [100%]
+
+============================== 15 passed in 2.34s ===============================
+```
+
+---
+
+## Common Issues & Solutions
+
+### Issue: Database Connection Failed
+
+**Error**: `asyncpg.exceptions.InvalidPasswordError`
+
+**Solution**:
+- Verify `DATABASE_URL` in `.env` is correct
+- Check Neon dashboard for correct credentials
+- Ensure connection string uses `postgresql+asyncpg://`
+
+### Issue: JWT Verification Failed
+
+**Error**: `401 Unauthorized - Invalid or expired token`
+
+**Solution**:
+- Verify `BETTER_AUTH_SECRET` matches the auth service
 - Check token hasn't expired
+- Ensure token is in format: `Bearer <token>`
 
-**Import Errors**:
-- Verify all dependencies are installed: `pip install -r requirements.txt`
-- Ensure virtual environment is activated
+### Issue: Import Errors
 
-### Frontend Issues
+**Error**: `ModuleNotFoundError: No module named 'fastapi'`
 
-**API Connection Error**:
-- Verify backend is running on port 8000
-- Check NEXT_PUBLIC_API_URL in .env.local
-- Verify CORS is enabled in FastAPI (if needed)
+**Solution**:
+- Activate virtual environment: `source venv/bin/activate`
+- Install dependencies: `pip install -r requirements.txt`
 
-**Authentication Not Working**:
-- Check browser console for errors
-- Verify Better Auth is configured correctly
-- Ensure JWT token is being stored (check browser cookies/localStorage)
+### Issue: Port Already in Use
 
-**Build Errors**:
-- Delete node_modules and package-lock.json
-- Run `npm install` again
-- Verify Node.js version is 18+
+**Error**: `OSError: [Errno 48] Address already in use`
 
-### Common Errors
+**Solution**:
+- Kill process using port 8000: `lsof -ti:8000 | xargs kill -9`
+- Or use different port: `uvicorn app.main:app --port 8001`
 
-**401 Unauthorized**:
-- Token is missing, invalid, or expired
-- Sign in again to get a new token
-
-**403 Forbidden**:
-- Attempting to access another user's task
-- Verify you're signed in as the correct user
-
-**404 Not Found**:
-- Task ID doesn't exist
-- Verify the task ID in the URL
-
-**422 Validation Error**:
-- Request body doesn't match expected schema
-- Check API documentation for required fields
+---
 
 ## Development Workflow
 
-### Making Changes
+### 1. Make Code Changes
 
-1. Make code changes in backend or frontend
-2. Backend: Server auto-reloads with `--reload` flag
-3. Frontend: Next.js auto-reloads on file changes
-4. Test changes manually or with cURL
-5. Verify data isolation is maintained
+Edit files in `backend/app/`
 
-### Adding New Features
+### 2. Server Auto-Reloads
 
-1. Update spec.md with new requirements
-2. Run /sp.plan to update plan.md
-3. Run /sp.tasks to generate implementation tasks
-4. Follow Agentic Dev Stack workflow
+With `--reload` flag, server automatically restarts on file changes.
 
-## Production Deployment
+### 3. Test Changes
 
-### Backend Deployment
+```bash
+# Run tests
+pytest
 
-1. Set environment variables in production environment
-2. Use production-grade ASGI server (e.g., Gunicorn with Uvicorn workers)
-3. Enable HTTPS (required for JWT security)
-4. Configure CORS for frontend domain
-5. Set up monitoring and logging
+# Or test manually with curl/Swagger UI
+```
 
-### Frontend Deployment
+### 4. Commit Changes
 
-1. Build production bundle: `npm run build`
-2. Deploy to Vercel, Netlify, or similar platform
-3. Set environment variables (NEXT_PUBLIC_API_URL, BETTER_AUTH_SECRET)
-4. Ensure HTTPS is enabled
-5. Configure domain and DNS
+```bash
+git add .
+git commit -m "Add task update endpoint"
+```
 
-### Security Checklist
+---
 
-- [ ] HTTPS enabled on both frontend and backend
-- [ ] BETTER_AUTH_SECRET is strong and secret (32+ characters)
-- [ ] Database credentials are secure and not exposed
-- [ ] CORS is configured to allow only trusted domains
-- [ ] JWT token expiration is set appropriately
-- [ ] Password hashing is using bcrypt with sufficient work factor
-- [ ] All API endpoints verify JWT tokens
-- [ ] All database queries filter by user_id
+## API Documentation
 
-## Success Criteria Validation
+### Interactive Docs (Swagger UI)
+- URL: http://localhost:8000/docs
+- Features: Try endpoints, see schemas, authentication
 
-Verify the application meets all success criteria from spec.md:
+### Alternative Docs (ReDoc)
+- URL: http://localhost:8000/redoc
+- Features: Clean layout, better for reading
 
-- [ ] SC-001: Account creation + first task creation completes in under 3 minutes
-- [ ] SC-002: Data isolation verified - no cross-user access possible
-- [ ] SC-003: All HTTP status codes are correct (401, 403, 404, 422, 500)
-- [ ] SC-004: All 5 todo operations work (create, read, update, complete, delete)
-- [ ] SC-005: JWT tokens issued on signin and verified on every request
-- [ ] SC-006: Task list updates immediately without page refresh
-- [ ] SC-007: System handles 100 concurrent users (load testing required)
-- [ ] SC-008: 95% of operations complete in under 2 seconds (performance testing required)
-- [ ] SC-009: Zero security vulnerabilities (security audit required)
-- [ ] SC-010: Spec-driven workflow demonstrated with clear traceability
+### OpenAPI Schema
+- URL: http://localhost:8000/openapi.json
+- Features: Machine-readable API specification
+
+---
+
+## Environment Variables Reference
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | Yes | - | Neon PostgreSQL connection string |
+| `BETTER_AUTH_SECRET` | Yes | - | JWT verification secret |
+| `JWT_ALGORITHM` | No | HS256 | JWT signing algorithm |
+| `ENVIRONMENT` | No | development | Environment name |
+| `DEBUG` | No | false | Enable debug mode |
+
+---
 
 ## Next Steps
 
-After verifying the quickstart guide works:
+1. **Implement Authentication**: Integrate with Better Auth for user signup/signin
+2. **Add Frontend**: Build Next.js frontend to consume this API
+3. **Deploy**: Deploy to production (Vercel, Railway, etc.)
+4. **Monitor**: Add logging and monitoring
+5. **Scale**: Optimize for production load
 
-1. Run `/sp.tasks` to generate implementation tasks
-2. Follow tasks.md to implement features in priority order (P1 → P2 → P3 → P4 → P5)
-3. Validate each user story independently before proceeding to the next
-4. Create PHRs for all implementation work
-5. Run `/sp.git.commit_pr` to commit and create pull request
+---
+
+## Additional Resources
+
+- **FastAPI Documentation**: https://fastapi.tiangolo.com/
+- **SQLModel Documentation**: https://sqlmodel.tiangolo.com/
+- **Neon Documentation**: https://neon.tech/docs/
+- **Pydantic Documentation**: https://docs.pydantic.dev/
+- **JWT Best Practices**: https://tools.ietf.org/html/rfc8725
+
+---
+
+## Support
+
+For issues or questions:
+1. Check the [API documentation](http://localhost:8000/docs)
+2. Review the [specification](./spec.md)
+3. Check the [implementation plan](./plan.md)
+4. Review test files for usage examples
+
+---
+
+## Quick Reference
+
+**Start server**: `uvicorn app.main:app --reload`
+**Run tests**: `pytest`
+**View docs**: http://localhost:8000/docs
+**API base URL**: http://localhost:8000/api

@@ -1,161 +1,198 @@
-# Feature Specification: Multi-User Todo Full-Stack Web Application
+# Feature Specification: Backend API & Database (Task Management Core)
 
-**Feature Branch**: `002-multi-user-todo-app`
+**Feature Branch**: `003-backend-task-api`
 **Created**: 2026-02-08
 **Status**: Draft
-**Input**: User description: "Phase II – Multi-User Todo Full-Stack Web Application"
+**Input**: User description: "Spec 2 – Backend API & Database (Task Management Core) - Designing and implementing a secure, multi-user REST API with persistent storage in Neon Serverless PostgreSQL, enforcing user ownership at the data and query level, and integrating JWT-authenticated requests with backend logic."
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - User Registration and Authentication (Priority: P1)
+### User Story 1 - View Personal Task List (Priority: P1)
 
-Users can create an account and sign in to access their personal todo list. Each user has isolated access to only their own tasks, with authentication enforced through JWT tokens.
+A user wants to see all their tasks in one place so they can understand what needs to be done. When they request their task list, the system retrieves only tasks that belong to them, ensuring complete privacy and data isolation from other users.
 
-**Why this priority**: Authentication is foundational - all other features depend on user identity and data isolation. Without this, the multi-user requirement cannot be met.
+**Why this priority**: This is the foundation of task management - users must be able to view their tasks before they can do anything else. Without this, no other functionality is useful.
 
-**Independent Test**: Can be fully tested by creating a new account, signing in, receiving a JWT token, and verifying that the token is required for subsequent API calls. Delivers secure user identity management.
+**Independent Test**: Can be fully tested by authenticating as a user, creating several tasks, and verifying that only those tasks appear in the list. Testing with multiple users confirms data isolation.
 
 **Acceptance Scenarios**:
 
-1. **Given** a new user visits the application, **When** they provide valid email and password on the signup page, **Then** an account is created and they are automatically signed in with a JWT token
-2. **Given** an existing user with valid credentials, **When** they enter their email and password on the signin page, **Then** they receive a JWT token and are redirected to their task list
-3. **Given** a user attempts to access protected API endpoints, **When** they do not provide a valid JWT token, **Then** the system returns HTTP 401 Unauthorized
-4. **Given** a signed-in user, **When** their JWT token expires, **Then** they are prompted to sign in again
-5. **Given** a user provides invalid credentials, **When** they attempt to sign in, **Then** the system returns an appropriate error message without revealing whether the email exists
+1. **Given** a user is authenticated with a valid token, **When** they request their task list, **Then** the system returns all tasks owned by that user
+2. **Given** a user has no tasks, **When** they request their task list, **Then** the system returns an empty list with a success status
+3. **Given** multiple users exist with their own tasks, **When** User A requests their task list, **Then** the system returns only User A's tasks, never User B's tasks
+4. **Given** a user is not authenticated, **When** they attempt to request a task list, **Then** the system rejects the request with an authentication error
 
 ---
 
-### User Story 2 - Create and List Tasks (Priority: P2)
+### User Story 2 - Create New Tasks (Priority: P1)
 
-Users can create new tasks with a title and description, and view a list of all their tasks. Each user sees only their own tasks, never tasks belonging to other users.
+A user wants to add new tasks to their list so they can track things they need to do. When they create a task, it is automatically associated with their user account and stored persistently so it's available across sessions.
 
-**Why this priority**: This is the core value proposition of a todo application - the ability to capture and view tasks. It's the minimum viable product for a todo app.
+**Why this priority**: Creating tasks is equally fundamental as viewing them - users need to add tasks to build their list. This is the primary input mechanism for the system.
 
-**Independent Test**: Can be fully tested by signing in, creating multiple tasks with different titles and descriptions, and verifying that all created tasks appear in the user's task list. Delivers immediate task management value.
+**Independent Test**: Can be fully tested by authenticating as a user, creating a task with specific details, and verifying it appears in their task list with correct ownership.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated user on the task creation page, **When** they enter a task title and optional description and submit, **Then** a new task is created and appears in their task list
-2. **Given** an authenticated user, **When** they view their task list, **Then** they see all tasks they have created, sorted by creation date (newest first)
-3. **Given** two different authenticated users (User A and User B), **When** User A creates tasks, **Then** User B cannot see User A's tasks in their own task list
-4. **Given** an authenticated user, **When** they create a task with only a title (no description), **Then** the task is created successfully with an empty description
-5. **Given** an unauthenticated user, **When** they attempt to create or view tasks, **Then** the system returns HTTP 401 Unauthorized
+1. **Given** a user is authenticated, **When** they submit a new task with title and description, **Then** the system creates the task, associates it with the user, and returns the created task with a unique identifier
+2. **Given** a user creates a task, **When** they later request their task list, **Then** the newly created task appears in the list
+3. **Given** a user submits a task with only required fields, **When** the task is created, **Then** optional fields are set to sensible defaults (e.g., completion status is false)
+4. **Given** a user is not authenticated, **When** they attempt to create a task, **Then** the system rejects the request with an authentication error
 
 ---
 
-### User Story 3 - Update Task Details (Priority: P3)
+### User Story 3 - View Individual Task Details (Priority: P2)
 
-Users can edit the title and description of their existing tasks. Only the task owner can update their tasks.
+A user wants to view the complete details of a specific task so they can review all information about it. The system ensures users can only access tasks they own.
 
-**Why this priority**: Users need to correct mistakes or update task information as requirements change. This enhances the usability of the core task management feature.
+**Why this priority**: While viewing the list is essential, users also need to see full details of individual tasks, especially if the list view shows abbreviated information.
 
-**Independent Test**: Can be fully tested by creating a task, editing its title and description, and verifying the changes are saved and displayed correctly. Delivers task modification capability.
+**Independent Test**: Can be fully tested by creating a task, noting its identifier, and retrieving it by ID to verify all details are returned correctly and ownership is enforced.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated user viewing their task list, **When** they select a task and edit its title or description, **Then** the changes are saved and reflected immediately in the task list
-2. **Given** an authenticated user, **When** they attempt to update a task that belongs to another user, **Then** the system returns HTTP 403 Forbidden
-3. **Given** an authenticated user editing a task, **When** they clear the title field, **Then** the system prevents saving and displays a validation error (title is required)
-4. **Given** an authenticated user, **When** they update only the description (leaving title unchanged), **Then** only the description is updated
+1. **Given** a user owns a task with a specific ID, **When** they request that task by ID, **Then** the system returns the complete task details
+2. **Given** a user attempts to access a task owned by another user, **When** they request it by ID, **Then** the system rejects the request with an authorization error
+3. **Given** a user requests a task ID that doesn't exist, **When** they make the request, **Then** the system returns a not found error
+4. **Given** a user is not authenticated, **When** they attempt to retrieve a task, **Then** the system rejects the request with an authentication error
 
 ---
 
-### User Story 4 - Mark Tasks Complete/Incomplete (Priority: P4)
+### User Story 4 - Update Existing Tasks (Priority: P2)
 
-Users can mark tasks as complete or incomplete to track their progress. Completed tasks are visually distinguished from incomplete tasks.
+A user wants to modify their tasks to update information or mark them as complete/incomplete. Changes are saved persistently and reflected immediately in their task list.
 
-**Why this priority**: Task completion tracking is essential for productivity - users need to know what's done and what's pending. This adds significant value to task management.
+**Why this priority**: Tasks evolve over time - users need to update details, fix mistakes, or toggle completion status. This is critical for task management but depends on tasks existing first.
 
-**Independent Test**: Can be fully tested by creating tasks, marking them as complete, verifying visual distinction, and toggling them back to incomplete. Delivers progress tracking capability.
+**Independent Test**: Can be fully tested by creating a task, modifying its fields (including toggling completion), and verifying the changes persist and are reflected in subsequent retrievals.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated user viewing their task list, **When** they mark a task as complete, **Then** the task's status changes to complete and is visually distinguished (e.g., strikethrough, different color)
-2. **Given** an authenticated user with a completed task, **When** they mark it as incomplete, **Then** the task returns to the incomplete state
-3. **Given** an authenticated user, **When** they view their task list, **Then** they can filter to see only complete tasks, only incomplete tasks, or all tasks
-4. **Given** an authenticated user, **When** they attempt to change the completion status of another user's task, **Then** the system returns HTTP 403 Forbidden
+1. **Given** a user owns a task, **When** they update the task's title or description, **Then** the system saves the changes and returns the updated task
+2. **Given** a user owns an incomplete task, **When** they mark it as complete, **Then** the system updates the completion status and the change persists
+3. **Given** a user owns a complete task, **When** they mark it as incomplete, **Then** the system updates the completion status and the change persists
+4. **Given** a user attempts to update a task owned by another user, **When** they submit the update, **Then** the system rejects the request with an authorization error
+5. **Given** a user attempts to update a non-existent task, **When** they submit the update, **Then** the system returns a not found error
+6. **Given** a user is not authenticated, **When** they attempt to update a task, **Then** the system rejects the request with an authentication error
 
 ---
 
-### User Story 5 - Delete Tasks (Priority: P5)
+### User Story 5 - Delete Tasks (Priority: P3)
 
-Users can permanently delete tasks they no longer need. Only the task owner can delete their tasks.
+A user wants to remove tasks they no longer need so their list stays clean and relevant. Deleted tasks are permanently removed from the system.
 
-**Why this priority**: Users need to remove completed or irrelevant tasks to keep their list manageable. This is important for long-term usability but not critical for initial value delivery.
+**Why this priority**: While useful for list maintenance, deletion is less critical than creating, viewing, and updating tasks. Users can work effectively even if they can't delete tasks.
 
-**Independent Test**: Can be fully tested by creating tasks, deleting them, and verifying they no longer appear in the task list. Delivers task cleanup capability.
+**Independent Test**: Can be fully tested by creating a task, deleting it, and verifying it no longer appears in the task list or can be retrieved by ID.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated user viewing their task list, **When** they select a task and choose to delete it, **Then** the task is permanently removed from their list
-2. **Given** an authenticated user, **When** they attempt to delete a task that belongs to another user, **Then** the system returns HTTP 403 Forbidden
-3. **Given** an authenticated user, **When** they delete a task, **Then** the deletion is immediate and cannot be undone
-4. **Given** an authenticated user with no tasks, **When** they view their task list, **Then** they see an empty state message encouraging them to create their first task
+1. **Given** a user owns a task, **When** they delete it, **Then** the system permanently removes the task and confirms successful deletion
+2. **Given** a user deletes a task, **When** they later request their task list, **Then** the deleted task does not appear
+3. **Given** a user attempts to delete a task owned by another user, **When** they submit the deletion request, **Then** the system rejects the request with an authorization error
+4. **Given** a user attempts to delete a non-existent task, **When** they submit the deletion request, **Then** the system returns a not found error
+5. **Given** a user is not authenticated, **When** they attempt to delete a task, **Then** the system rejects the request with an authentication error
 
 ---
 
 ### Edge Cases
 
-- What happens when a user's JWT token expires while they are actively using the application?
-- How does the system handle concurrent updates to the same task from multiple browser tabs?
-- What happens when a user attempts to create a task with an extremely long title or description (e.g., 10,000 characters)?
-- How does the system handle special characters, emojis, or HTML in task titles and descriptions?
-- What happens when a user attempts to sign up with an email that already exists?
-- How does the system handle network failures during task creation, update, or deletion?
-- What happens when a user attempts to access a task ID that doesn't exist or belongs to another user?
+- What happens when a user's authentication token expires during a request?
+- How does the system handle concurrent updates to the same task by the same user from different devices?
+- What happens if a user attempts to create a task with extremely long text fields?
+- How does the system handle requests with malformed or missing required fields?
+- What happens when the database connection is temporarily unavailable?
+- How does the system handle a user attempting to access tasks using a valid token but with a user ID that doesn't exist in the system?
+- What happens if a user's account is deleted while they have active tasks?
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: System MUST allow users to create accounts with email and password
-- **FR-002**: System MUST validate email format and password strength during signup
-- **FR-003**: System MUST issue JWT tokens upon successful authentication
-- **FR-004**: System MUST verify JWT tokens on every API request to protected endpoints
-- **FR-005**: System MUST derive user identity exclusively from JWT token claims, never from client-provided data
-- **FR-006**: System MUST enforce data isolation - users can only access their own tasks
-- **FR-007**: System MUST persist all user accounts and tasks in the database
-- **FR-008**: System MUST allow users to create tasks with a title (required) and description (optional)
-- **FR-009**: System MUST allow users to view a list of all their tasks
-- **FR-010**: System MUST allow users to update the title and description of their own tasks
-- **FR-011**: System MUST allow users to mark tasks as complete or incomplete
-- **FR-012**: System MUST allow users to delete their own tasks
-- **FR-013**: System MUST return HTTP 401 for requests without valid JWT tokens
-- **FR-014**: System MUST return HTTP 403 when users attempt to access or modify tasks they don't own
-- **FR-015**: System MUST return HTTP 404 when users attempt to access non-existent tasks
-- **FR-016**: System MUST hash passwords before storing them in the database
-- **FR-017**: System MUST include user ID in JWT token claims
-- **FR-018**: System MUST set JWT token expiration time
-- **FR-019**: System MUST filter all database queries by authenticated user ID
-- **FR-020**: System MUST validate that task titles are not empty before saving
+- **FR-001**: System MUST store all task data persistently in a database so tasks survive application restarts and are available across sessions
+- **FR-002**: System MUST require a valid authentication token for all task operations to ensure only authenticated users can access the API
+- **FR-003**: System MUST extract user identity exclusively from the authenticated token, never from request parameters or body, to prevent user impersonation
+- **FR-004**: System MUST enforce data isolation so users can only access, modify, or delete their own tasks, never tasks belonging to other users
+- **FR-005**: System MUST support creating tasks with at minimum a title, and optionally a description and completion status
+- **FR-006**: System MUST assign each task a unique identifier upon creation that can be used to reference it in subsequent operations
+- **FR-007**: System MUST automatically associate each created task with the authenticated user who created it
+- **FR-008**: System MUST support retrieving all tasks for the authenticated user in a single request
+- **FR-009**: System MUST support retrieving a specific task by its unique identifier, subject to ownership verification
+- **FR-010**: System MUST support updating task fields (title, description, completion status) for tasks owned by the authenticated user
+- **FR-011**: System MUST support toggling task completion status between complete and incomplete states
+- **FR-012**: System MUST support permanently deleting tasks owned by the authenticated user
+- **FR-013**: System MUST return appropriate error responses for authentication failures, authorization failures, not found errors, and validation errors
+- **FR-014**: System MUST validate that required fields are present and properly formatted before processing requests
+- **FR-015**: System MUST handle database connection failures gracefully and return appropriate error responses
 
 ### Key Entities
 
-- **User**: Represents a registered user account with email, hashed password, and unique identifier. Each user owns zero or more tasks.
-- **Task**: Represents a todo item with title, description, completion status, creation timestamp, and owner reference. Each task belongs to exactly one user.
+- **Task**: Represents a single todo item that a user needs to track. Contains a unique identifier, title (required), optional description, completion status (boolean), ownership reference to the user who created it, and timestamps for creation and last modification.
 
-### Assumptions
-
-- Email addresses are unique identifiers for user accounts
-- Password hashing uses industry-standard algorithms (e.g., bcrypt, argon2)
-- JWT tokens expire after a reasonable time period (e.g., 1 hour for access tokens)
-- Task titles have a reasonable maximum length (e.g., 200 characters)
-- Task descriptions have a reasonable maximum length (e.g., 2000 characters)
-- Tasks are sorted by creation date (newest first) by default
-- Deleted tasks are permanently removed (no soft delete or trash functionality)
-- The application uses HTTPS in production to protect JWT tokens in transit
+- **User**: Represents an authenticated user of the system (defined in authentication feature). Each user can own multiple tasks. User identity is established through authentication tokens and used to enforce data isolation.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: Users can complete account creation and first task creation in under 3 minutes
-- **SC-002**: System correctly isolates user data - no user can view or modify another user's tasks under any circumstances
-- **SC-003**: All API endpoints return appropriate HTTP status codes (401 for unauthorized, 403 for forbidden, 404 for not found, 422 for validation errors, 500 for server errors)
-- **SC-004**: Users can perform all 5 basic todo operations (create, read, update, complete/incomplete, delete) successfully
-- **SC-005**: Authentication flow works correctly - users receive JWT tokens on signin and tokens are validated on every protected request
-- **SC-006**: Task list displays updates immediately after create, update, or delete operations without requiring page refresh
-- **SC-007**: System handles at least 100 concurrent users without performance degradation
-- **SC-008**: 95% of task operations (create, update, delete, mark complete) complete in under 2 seconds
-- **SC-009**: Zero security vulnerabilities related to authentication bypass or cross-user data access
-- **SC-010**: Application demonstrates successful spec-driven development workflow with clear traceability from spec to implementation
+- **SC-001**: Users can create a new task and see it appear in their task list within 2 seconds under normal conditions
+- **SC-002**: Users can retrieve their complete task list containing up to 1000 tasks within 3 seconds
+- **SC-003**: 100% of task operations correctly enforce user ownership - no user can ever access another user's tasks
+- **SC-004**: System maintains 99.9% data consistency - all task operations (create, read, update, delete) reflect accurately in the persistent database
+- **SC-005**: System correctly rejects 100% of unauthenticated requests with appropriate error messages
+- **SC-006**: Task completion toggle operations complete within 1 second and immediately reflect in subsequent retrievals
+- **SC-007**: System handles at least 100 concurrent users performing task operations without data corruption or cross-user data leakage
+- **SC-008**: All API endpoints return responses in a consistent format with appropriate HTTP status codes (200, 201, 400, 401, 403, 404, 500)
+
+## Scope & Boundaries *(mandatory)*
+
+### In Scope
+
+- REST API endpoints for task CRUD operations (Create, Read, Update, Delete)
+- Persistent storage of task data in a database
+- User authentication verification for all endpoints
+- User authorization and data isolation enforcement
+- Task ownership association and verification
+- Task completion status management
+- Error handling and appropriate error responses
+- Data validation for task fields
+
+### Out of Scope
+
+- User authentication and token generation (handled by separate authentication feature)
+- User account management (registration, login, password reset)
+- Task sharing or collaboration between users
+- Task categories, tags, or labels
+- Task due dates or reminders
+- Task priority levels
+- Task search or filtering capabilities
+- Task sorting options
+- Bulk operations (delete multiple tasks, mark multiple as complete)
+- Task history or audit trail
+- File attachments to tasks
+- Task comments or notes beyond the description field
+- Real-time synchronization or websocket updates
+- Mobile-specific optimizations
+- Offline support or caching strategies
+
+### Dependencies
+
+- **Authentication System**: This feature depends on an existing authentication system that issues JWT tokens and validates them. The authentication system must provide user identity information that can be extracted from tokens.
+
+- **Database Infrastructure**: Requires a configured and accessible database instance for persistent storage.
+
+### Assumptions
+
+- JWT tokens contain user identity information (user ID) that can be reliably extracted
+- The authentication system has already validated the token before requests reach the task API
+- Database schema can be created and modified as needed for task storage
+- Network connectivity between the API and database is reliable under normal conditions
+- User IDs from the authentication system are unique and stable
+- The system operates in a trusted network environment where HTTPS/TLS is handled at a higher layer
+- Task titles and descriptions have reasonable length limits (e.g., title ≤ 200 characters, description ≤ 2000 characters)
+- Timestamps for task creation and modification are automatically managed by the system
+- The system uses standard HTTP status codes and JSON response formats
+
+## Open Questions
+
+None - all requirements are sufficiently specified for implementation planning.

@@ -1,9 +1,7 @@
-# Tasks: Multi-User Todo Full-Stack Web Application
+# Tasks: Backend API & Database (Task Management Core)
 
-**Input**: Design documents from `/specs/002-multi-user-todo-app/`
-**Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
-
-**Tests**: No automated tests - manual validation only per research.md decision (tests not specified in feature specification)
+**Input**: Design documents from `/specs/003-backend-task-api/`
+**Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -15,8 +13,7 @@
 
 ## Path Conventions
 
-- **Web app**: `backend/src/`, `frontend/src/`
-- Paths shown below follow web application structure from plan.md
+All paths are relative to repository root: `backend/app/...`
 
 ---
 
@@ -24,15 +21,11 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [x] T001 Create backend directory structure (backend/src/models/, backend/src/api/, backend/src/core/, backend/tests/)
-- [x] T002 Create frontend directory structure (frontend/src/app/, frontend/src/components/, frontend/src/lib/, frontend/src/types/)
-- [x] T003 [P] Initialize Python virtual environment and install backend dependencies (fastapi, uvicorn, sqlmodel, asyncpg, python-jose[cryptography], passlib[bcrypt], python-multipart) in backend/
-- [x] T004 [P] Initialize Next.js project with TypeScript and install frontend dependencies (next, react, react-dom, better-auth, tailwindcss) in frontend/
-- [x] T005 [P] Create backend/requirements.txt with all Python dependencies
-- [x] T006 [P] Create backend/.env.example with template environment variables (BETTER_AUTH_SECRET, DATABASE_URL, BACKEND_PORT, BACKEND_HOST)
-- [x] T007 [P] Create frontend/.env.local.example with template environment variables (NEXT_PUBLIC_API_URL, BETTER_AUTH_SECRET)
-- [x] T008 [P] Configure Tailwind CSS in frontend/tailwind.config.js and frontend/postcss.config.js
-- [x] T009 [P] Create frontend/tsconfig.json with TypeScript configuration for Next.js App Router
+- [x] T001 Create backend directory structure per plan.md (backend/app/, backend/tests/, backend/app/models/, backend/app/schemas/, backend/app/api/, backend/app/api/routes/, backend/app/core/)
+- [x] T002 Create requirements.txt with dependencies: fastapi==0.109.0, uvicorn[standard]==0.27.0, sqlmodel==0.0.14, asyncpg==0.29.0, pydantic==2.5.3, python-jose[cryptography]==3.3.0, python-dotenv==1.0.0, pytest==7.4.4, pytest-asyncio==0.23.3, httpx==0.26.0
+- [x] T003 [P] Create .env.example with DATABASE_URL, BETTER_AUTH_SECRET, JWT_ALGORITHM, ENVIRONMENT, DEBUG placeholders
+- [x] T004 [P] Create backend/README.md with setup instructions from quickstart.md
+- [x] T005 [P] Create all __init__.py files in backend/app/, backend/app/models/, backend/app/schemas/, backend/app/api/, backend/app/api/routes/, backend/app/core/
 
 ---
 
@@ -42,122 +35,124 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [x] T010 Create environment configuration module in backend/src/core/config.py (load DATABASE_URL, BETTER_AUTH_SECRET, BACKEND_PORT, BACKEND_HOST from environment)
-- [x] T011 Create Neon PostgreSQL async database connection in backend/src/core/database.py (async engine with asyncpg, connection pooling, SSL enabled)
-- [x] T012 Create security utilities in backend/src/core/security.py (bcrypt password hashing with work factor 12, JWT token verification using python-jose with BETTER_AUTH_SECRET)
-- [x] T013 [P] Create User SQLModel schema in backend/src/models/user.py (id UUID, email unique indexed, hashed_password, created_at, updated_at)
-- [x] T014 [P] Create Task SQLModel schema in backend/src/models/task.py (id UUID, user_id FK to users.id, title max 200, description max 2000 nullable, is_complete default False, created_at, updated_at, indexes on user_id)
-- [x] T015 Create JWT authentication dependency in backend/src/api/deps.py (extract Bearer token from Authorization header, verify signature, decode user_id, return HTTP 401 on failure)
-- [x] T016 Create FastAPI application entry point in backend/src/main.py (initialize app, include routers, configure CORS for frontend origin, create database tables on startup)
-- [x] T017 [P] Create Better Auth configuration in frontend/src/lib/auth.ts (enable JWT plugin, configure token expiration 1 hour, set BETTER_AUTH_SECRET)
-- [x] T018 [P] Create API client wrapper in frontend/src/lib/api.ts (base URL from NEXT_PUBLIC_API_URL, automatically attach JWT token to Authorization header, handle 401 errors)
-- [x] T019 [P] Create TypeScript type definitions in frontend/src/types/task.ts (User type, Task type, TaskStatus enum, API response types)
-- [x] T020 [P] Create root layout in frontend/src/app/layout.tsx (Better Auth provider, global styles, metadata)
+- [x] T006 Create backend/app/config.py with Settings class using pydantic BaseSettings for DATABASE_URL, BETTER_AUTH_SECRET, JWT_ALGORITHM environment variables
+- [x] T007 Create backend/app/database.py with async SQLAlchemy engine, connection pooling (pool_size=5, max_overflow=10, pool_recycle=3600, pool_pre_ping=True), and get_db dependency function
+- [x] T008 Create backend/app/models/task.py with Task SQLModel entity including id, user_id, title, description, is_completed, created_at, updated_at fields per data-model.md
+- [x] T009 [P] Create backend/app/schemas/task.py with TaskCreate, TaskUpdate, TaskResponse Pydantic schemas per data-model.md
+- [x] T010 [P] Create backend/app/core/security.py with JWT verification utilities using python-jose (decode token, verify signature, extract user_id from 'sub' claim)
+- [x] T011 Create backend/app/api/deps.py with get_current_user dependency function using HTTPBearer and Depends(security.verify_jwt) to extract user_id from Authorization header
+- [x] T012 Create backend/app/main.py with FastAPI app initialization, CORS middleware, database table creation on startup (SQLModel.metadata.create_all), and health check endpoint
+- [x] T013 Create backend/app/api/routes/tasks.py with APIRouter initialization and placeholder for task endpoints
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
 ---
 
-## Phase 3: User Story 1 - User Registration and Authentication (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 - View Personal Task List (Priority: P1) 🎯 MVP
 
-**Goal**: Users can create accounts and sign in to access their personal todo list with JWT-based authentication
+**Goal**: Users can retrieve all their tasks in a list, filtered by their user_id from JWT token
 
-**Independent Test**: Create new account, sign in, receive JWT token, verify token required for API calls
+**Independent Test**: Authenticate as a user, create several tasks via POST endpoint, call GET /api/tasks and verify only that user's tasks are returned. Test with multiple users to confirm data isolation.
 
 ### Implementation for User Story 1
 
-- [x] T021 [P] [US1] Implement POST /api/auth/signup endpoint in backend/src/api/auth.py (validate email format, check email uniqueness, hash password with bcrypt, create user in database, issue JWT token, return user + token, handle 409 conflict for duplicate email)
-- [x] T022 [P] [US1] Implement POST /api/auth/signin endpoint in backend/src/api/auth.py (find user by email, verify password with bcrypt constant-time comparison, issue JWT token on success, return user + token, return 401 on invalid credentials without revealing email existence)
-- [x] T023 [US1] Register authentication router in backend/src/main.py (include auth router with /api/auth prefix)
-- [x] T024 [P] [US1] Create signup page in frontend/src/app/signup/page.tsx (email input with validation, password input min 8 chars, submit form to POST /api/auth/signup, store JWT token, redirect to /tasks on success, display error messages)
-- [x] T025 [P] [US1] Create signin page in frontend/src/app/signin/page.tsx (email input, password input, submit form to POST /api/auth/signin, store JWT token, redirect to /tasks on success, display error messages)
-- [x] T026 [P] [US1] Create landing page in frontend/src/app/page.tsx (welcome message, links to /signup and /signin, redirect authenticated users to /tasks)
-- [x] T027 [US1] Create Next.js middleware in frontend/src/middleware.ts (check Better Auth session, redirect unauthenticated users from /tasks to /signin, redirect authenticated users from /signin or /signup to /tasks)
+- [x] T014 [US1] Implement GET /api/tasks endpoint in backend/app/api/routes/tasks.py with user_id from Depends(get_current_user), query tasks filtered by user_id, return list of TaskResponse
+- [x] T015 [US1] Add query-level filtering in GET /api/tasks to ensure WHERE user_id = current_user_id in database query
+- [x] T016 [US1] Add error handling for database connection failures in GET /api/tasks endpoint (return 500 with appropriate message)
+- [x] T017 [US1] Register tasks router in backend/app/main.py with app.include_router(tasks.router, prefix="/api", tags=["tasks"])
 
-**Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
+**Checkpoint**: At this point, User Story 1 should be fully functional - users can view their task list with complete data isolation
 
 ---
 
-## Phase 4: User Story 2 - Create and List Tasks (Priority: P2)
+## Phase 4: User Story 2 - Create New Tasks (Priority: P1) 🎯 MVP
 
-**Goal**: Users can create new tasks and view a list of all their tasks with strict data isolation
+**Goal**: Users can create new tasks that are automatically associated with their user_id from JWT token
 
-**Independent Test**: Sign in, create multiple tasks, verify all appear in task list sorted by creation date, verify other users cannot see these tasks
+**Independent Test**: Authenticate as a user, call POST /api/tasks with task data, verify task is created with correct user_id, then call GET /api/tasks to confirm it appears in the list.
 
 ### Implementation for User Story 2
 
-- [ ] T028 [P] [US2] Implement GET /api/tasks endpoint in backend/src/api/tasks.py (require JWT auth via deps.py, query tasks filtered by authenticated user_id, support ?status=all|complete|incomplete query parameter, order by created_at DESC, return task list)
-- [ ] T029 [P] [US2] Implement POST /api/tasks endpoint in backend/src/api/tasks.py (require JWT auth, validate title not empty and max 200 chars, validate description max 2000 chars if provided, create task with authenticated user_id, set is_complete=False, return created task, return 422 on validation error)
-- [ ] T030 [US2] Register tasks router in backend/src/main.py (include tasks router with /api/tasks prefix)
-- [ ] T031 [US2] Create protected tasks page in frontend/src/app/tasks/page.tsx (fetch tasks from GET /api/tasks on mount, display TaskList component, display TaskForm component for creation, handle loading state, handle empty state, handle errors)
-- [ ] T032 [P] [US2] Create TaskList component in frontend/src/components/TaskList.tsx (receive tasks array prop, render TaskItem for each task, display "No tasks yet" empty state, support filter dropdown for all/complete/incomplete)
-- [ ] T033 [P] [US2] Create TaskForm component in frontend/src/components/TaskForm.tsx (title input required max 200 chars, description textarea optional max 2000 chars, submit to POST /api/tasks, clear form on success, display validation errors, emit event to refresh task list)
-- [ ] T034 [P] [US2] Create TaskItem component in frontend/src/components/TaskItem.tsx (display task title and description, display created_at timestamp, display completion status, placeholder for edit/delete/complete actions to be added in later stories)
+- [x] T018 [US2] Implement POST /api/tasks endpoint in backend/app/api/routes/tasks.py with user_id from Depends(get_current_user), TaskCreate request body, create Task with user_id auto-assigned, return 201 with TaskResponse
+- [x] T019 [US2] Add validation in POST /api/tasks to ensure title is not empty/whitespace using Pydantic validator from TaskCreate schema
+- [x] T020 [US2] Add database session commit and refresh in POST /api/tasks to persist task and return created task with generated id
+- [x] T021 [US2] Add error handling for validation failures in POST /api/tasks (return 422 with Pydantic validation errors)
+- [x] T022 [US2] Add error handling for database errors in POST /api/tasks (return 500 with appropriate message)
 
-**Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
+**Checkpoint**: At this point, User Stories 1 AND 2 should both work independently - users can create tasks and view their list
 
 ---
 
-## Phase 5: User Story 3 - Update Task Details (Priority: P3)
+## Phase 5: User Story 3 - View Individual Task Details (Priority: P2)
 
-**Goal**: Users can edit title and description of their existing tasks with ownership verification
+**Goal**: Users can retrieve complete details of a specific task by ID, with ownership verification
 
-**Independent Test**: Create task, edit title and description, verify changes saved and displayed, verify cannot edit other users' tasks
+**Independent Test**: Create a task via POST, note its ID, call GET /api/tasks/{id} and verify all details are returned. Test with another user's token to confirm 404 is returned (not 403, to prevent enumeration).
 
 ### Implementation for User Story 3
 
-- [ ] T035 [P] [US3] Implement GET /api/tasks/{task_id} endpoint in backend/src/api/tasks.py (require JWT auth, query task by id AND authenticated user_id, return task if found, return 404 if not found, return 403 if task belongs to another user)
-- [ ] T036 [P] [US3] Implement PUT /api/tasks/{task_id} endpoint in backend/src/api/tasks.py (require JWT auth, validate title not empty and max 200 chars, validate description max 2000 chars if provided, update task WHERE id=task_id AND user_id=authenticated_user_id, update updated_at timestamp, return updated task, return 404 if not found, return 403 if wrong owner, return 422 on validation error)
-- [ ] T037 [US3] Update TaskForm component in frontend/src/components/TaskForm.tsx (add edit mode prop, pre-populate fields with existing task data in edit mode, submit to PUT /api/tasks/{id} in edit mode, emit event to refresh task list on success)
-- [ ] T038 [US3] Update TaskItem component in frontend/src/components/TaskItem.tsx (add Edit button, show TaskForm in edit mode when Edit clicked, handle inline editing or modal dialog, display validation errors)
+- [x] T023 [US3] Implement GET /api/tasks/{id} endpoint in backend/app/api/routes/tasks.py with task_id path parameter, user_id from Depends(get_current_user), query task with WHERE id = task_id AND user_id = current_user_id
+- [x] T024 [US3] Add ownership verification in GET /api/tasks/{id} to return 404 if task not found OR user doesn't own it (prevents information leakage)
+- [x] T025 [US3] Add error handling for invalid task_id format in GET /api/tasks/{id} (return 422 for non-integer IDs)
+- [x] T026 [US3] Return TaskResponse with all task fields including timestamps in GET /api/tasks/{id}
 
-**Checkpoint**: All user stories 1, 2, AND 3 should now be independently functional
+**Checkpoint**: At this point, User Stories 1, 2, AND 3 should all work independently - users can create, list, and view individual tasks
 
 ---
 
-## Phase 6: User Story 4 - Mark Tasks Complete/Incomplete (Priority: P4)
+## Phase 6: User Story 4 - Update Existing Tasks (Priority: P2)
 
-**Goal**: Users can toggle task completion status with visual distinction and filtering
+**Goal**: Users can update their tasks (title, description, completion status) with changes persisted to database
 
-**Independent Test**: Create tasks, mark as complete, verify visual distinction, toggle back to incomplete, use filter to show only complete/incomplete tasks
+**Independent Test**: Create a task, call PUT /api/tasks/{id} with updated fields, verify changes are saved. Toggle is_completed between true/false and verify persistence. Test with another user's token to confirm 404 is returned.
 
 ### Implementation for User Story 4
 
-- [ ] T039 [US4] Implement PATCH /api/tasks/{task_id}/complete endpoint in backend/src/api/tasks.py (require JWT auth, toggle is_complete field using NOT is_complete WHERE id=task_id AND user_id=authenticated_user_id, update updated_at timestamp, return updated task, return 404 if not found, return 403 if wrong owner)
-- [ ] T040 [US4] Update TaskItem component in frontend/src/components/TaskItem.tsx (add checkbox or Complete button, call PATCH /api/tasks/{id}/complete on click, apply visual distinction for completed tasks using Tailwind CSS - strikethrough text and muted color, emit event to refresh task list)
-- [ ] T041 [US4] Update TaskList component in frontend/src/components/TaskList.tsx (implement filter dropdown with options: All, Complete, Incomplete, filter tasks client-side based on is_complete status, update displayed count)
+- [x] T027 [US4] Implement PUT /api/tasks/{id} endpoint in backend/app/api/routes/tasks.py with task_id path parameter, user_id from Depends(get_current_user), TaskUpdate request body, query task with ownership check
+- [x] T028 [US4] Add ownership verification in PUT /api/tasks/{id} to return 404 if task not found OR user doesn't own it
+- [x] T029 [US4] Implement partial update logic in PUT /api/tasks/{id} to only update fields provided in TaskUpdate (skip None values)
+- [x] T030 [US4] Update updated_at timestamp automatically in PUT /api/tasks/{id} when task is modified
+- [x] T031 [US4] Add validation in PUT /api/tasks/{id} to ensure title is not empty/whitespace if provided
+- [x] T032 [US4] Add database session commit and refresh in PUT /api/tasks/{id} to persist changes and return updated TaskResponse
+- [x] T033 [US4] Add error handling for validation failures and database errors in PUT /api/tasks/{id}
 
-**Checkpoint**: All user stories 1-4 should now be independently functional
+**Checkpoint**: At this point, User Stories 1-4 should all work independently - full CRUD except delete
 
 ---
 
-## Phase 7: User Story 5 - Delete Tasks (Priority: P5)
+## Phase 7: User Story 5 - Delete Tasks (Priority: P3)
 
-**Goal**: Users can permanently delete tasks with ownership verification
+**Goal**: Users can permanently delete their tasks from the database
 
-**Independent Test**: Create tasks, delete them, verify removed from list, verify cannot delete other users' tasks, verify empty state message when no tasks
+**Independent Test**: Create a task, call DELETE /api/tasks/{id}, verify 204 response. Call GET /api/tasks to confirm task no longer appears. Call GET /api/tasks/{id} to confirm 404 is returned. Test with another user's token to confirm 404 is returned.
 
 ### Implementation for User Story 5
 
-- [ ] T042 [US5] Implement DELETE /api/tasks/{task_id} endpoint in backend/src/api/tasks.py (require JWT auth, delete task WHERE id=task_id AND user_id=authenticated_user_id, return 204 No Content on success, return 404 if not found, return 403 if wrong owner)
-- [ ] T043 [US5] Update TaskItem component in frontend/src/components/TaskItem.tsx (add Delete button, call DELETE /api/tasks/{id} on click, add confirmation dialog before deletion, emit event to refresh task list on success, handle errors)
-- [ ] T044 [US5] Update tasks page in frontend/src/app/tasks/page.tsx (display empty state message when task list is empty - "No tasks yet. Create your first task to get started!")
+- [x] T034 [US5] Implement DELETE /api/tasks/{id} endpoint in backend/app/api/routes/tasks.py with task_id path parameter, user_id from Depends(get_current_user), query task with ownership check
+- [x] T035 [US5] Add ownership verification in DELETE /api/tasks/{id} to return 404 if task not found OR user doesn't own it
+- [x] T036 [US5] Execute database delete operation in DELETE /api/tasks/{id} with session.delete(task) and session.commit()
+- [x] T037 [US5] Return 204 No Content status in DELETE /api/tasks/{id} on successful deletion
+- [x] T038 [US5] Add error handling for database errors in DELETE /api/tasks/{id}
 
-**Checkpoint**: All user stories should now be independently functional
+**Checkpoint**: All user stories should now be independently functional - complete CRUD operations with data isolation
 
 ---
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-**Purpose**: Improvements that affect multiple user stories
+**Purpose**: Improvements that affect multiple user stories and production readiness
 
-- [ ] T045 [P] Add error handling and user-friendly error messages across all frontend pages (network errors, validation errors, authentication errors)
-- [ ] T046 [P] Add loading states and spinners to all async operations in frontend (task list loading, form submissions, delete confirmations)
-- [ ] T047 [P] Add success notifications for task operations in frontend (task created, updated, completed, deleted)
-- [ ] T048 [P] Update backend/.env.example with detailed comments explaining each environment variable
-- [ ] T049 [P] Update frontend/.env.local.example with detailed comments explaining each environment variable
-- [ ] T050 [P] Add CORS configuration in backend/src/main.py to allow frontend origin from NEXT_PUBLIC_API_URL
-- [ ] T051 Validate quickstart.md instructions by following setup steps and documenting any issues
+- [x] T039 [P] Add comprehensive error handling for expired JWT tokens across all endpoints (return 401 with "Token expired" message)
+- [x] T040 [P] Add comprehensive error handling for malformed JWT tokens across all endpoints (return 401 with "Invalid token" message)
+- [x] T041 [P] Add logging for all authentication failures in backend/app/api/deps.py using Python logging module
+- [x] T042 [P] Add logging for all database operations (create, update, delete) in backend/app/api/routes/tasks.py
+- [x] T043 [P] Validate field length constraints in all endpoints (title max 200 chars, description max 2000 chars)
+- [x] T044 [P] Add database connection health check in backend/app/main.py startup event
+- [x] T045 Create backend/.env file from .env.example with actual Neon PostgreSQL connection string and BETTER_AUTH_SECRET
+- [x] T046 Test all endpoints with curl commands from quickstart.md to verify API contract compliance
+- [x] T047 Verify all endpoints return correct HTTP status codes per contracts/task-api.yaml (200, 201, 204, 401, 404, 422, 500)
+- [x] T048 Run manual data isolation test with two different JWT tokens to confirm no cross-user data access
+- [x] T049 Update backend/README.md with final API documentation and deployment instructions
 
 ---
 
@@ -167,93 +162,148 @@
 
 - **Setup (Phase 1)**: No dependencies - can start immediately
 - **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
-- **User Stories (Phase 3-7)**: All depend on Foundational phase completion
-  - User stories can then proceed in parallel (if staffed)
-  - Or sequentially in priority order (P1 → P2 → P3 → P4 → P5)
+- **User Story 1 (Phase 3)**: Depends on Foundational (Phase 2) - No dependencies on other stories
+- **User Story 2 (Phase 4)**: Depends on Foundational (Phase 2) - No dependencies on other stories (can run parallel with US1)
+- **User Story 3 (Phase 5)**: Depends on Foundational (Phase 2) - No dependencies on other stories (can run parallel with US1/US2)
+- **User Story 4 (Phase 6)**: Depends on Foundational (Phase 2) - No dependencies on other stories (can run parallel with US1/US2/US3)
+- **User Story 5 (Phase 7)**: Depends on Foundational (Phase 2) - No dependencies on other stories (can run parallel with US1/US2/US3/US4)
 - **Polish (Phase 8)**: Depends on all desired user stories being complete
 
 ### User Story Dependencies
 
-- **User Story 1 (P1)**: Can start after Foundational (Phase 2) - No dependencies on other stories
-- **User Story 2 (P2)**: Can start after Foundational (Phase 2) - Requires authentication from US1 to test but is independently implementable
-- **User Story 3 (P3)**: Can start after Foundational (Phase 2) - Extends US2 functionality but is independently testable
-- **User Story 4 (P4)**: Can start after Foundational (Phase 2) - Extends US2 functionality but is independently testable
-- **User Story 5 (P5)**: Can start after Foundational (Phase 2) - Extends US2 functionality but is independently testable
+All user stories are **INDEPENDENT** after Foundational phase:
+
+- **User Story 1 (P1)**: Can start after Foundational - Implements GET /api/tasks (list)
+- **User Story 2 (P1)**: Can start after Foundational - Implements POST /api/tasks (create)
+- **User Story 3 (P2)**: Can start after Foundational - Implements GET /api/tasks/{id} (get single)
+- **User Story 4 (P2)**: Can start after Foundational - Implements PUT /api/tasks/{id} (update)
+- **User Story 5 (P3)**: Can start after Foundational - Implements DELETE /api/tasks/{id} (delete)
+
+**Note**: While US1 and US2 are both P1 priority, they can be implemented in parallel since they touch different endpoints. US3-US5 can also be implemented in parallel with US1/US2 if team capacity allows.
 
 ### Within Each User Story
 
-- Backend endpoints before frontend pages (frontend needs API to call)
-- Models and utilities before endpoints (endpoints depend on models)
-- Core components before pages (pages use components)
-- Story complete before moving to next priority
+- All tasks within a user story should be completed sequentially in the order listed
+- Tasks marked [P] within a phase can run in parallel
+- Each user story phase should be completed and tested before moving to the next priority
 
 ### Parallel Opportunities
 
-- All Setup tasks marked [P] can run in parallel
-- All Foundational tasks marked [P] can run in parallel (within Phase 2)
-- Once Foundational phase completes, all user stories can start in parallel (if team capacity allows)
-- Backend and frontend tasks within a story marked [P] can run in parallel
-- Different user stories can be worked on in parallel by different team members
+**Setup Phase (Phase 1)**:
+- T003, T004, T005 can run in parallel (different files)
+
+**Foundational Phase (Phase 2)**:
+- T009 (schemas) and T010 (security) can run in parallel with T006-T008
+- T009, T010 can run in parallel with each other
+
+**User Stories (Phase 3-7)**:
+- After Foundational phase completes, ALL user stories can be worked on in parallel by different developers
+- Each story is completely independent and touches different endpoints
+
+**Polish Phase (Phase 8)**:
+- T039, T040, T041, T042, T043, T044 can all run in parallel (different concerns)
 
 ---
 
-## Parallel Example: User Story 1
+## Parallel Example: After Foundational Phase
 
 ```bash
-# Launch backend auth endpoints together:
-Task: "Implement POST /api/auth/signup endpoint in backend/src/api/auth.py"
-Task: "Implement POST /api/auth/signin endpoint in backend/src/api/auth.py"
+# All user stories can start in parallel:
+Developer A: Phase 3 (User Story 1 - View List)
+Developer B: Phase 4 (User Story 2 - Create)
+Developer C: Phase 5 (User Story 3 - View Single)
+Developer D: Phase 6 (User Story 4 - Update)
+Developer E: Phase 7 (User Story 5 - Delete)
 
-# Launch frontend auth pages together:
-Task: "Create signup page in frontend/src/app/signup/page.tsx"
-Task: "Create signin page in frontend/src/app/signin/page.tsx"
-Task: "Create landing page in frontend/src/app/page.tsx"
+# Or with single developer, implement in priority order:
+1. Complete US1 (P1) → Test independently
+2. Complete US2 (P1) → Test independently
+3. Complete US3 (P2) → Test independently
+4. Complete US4 (P2) → Test independently
+5. Complete US5 (P3) → Test independently
 ```
 
 ---
 
 ## Implementation Strategy
 
-### MVP First (User Story 1 Only)
+### MVP First (User Stories 1 & 2 Only)
 
-1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational (CRITICAL - blocks all stories)
-3. Complete Phase 3: User Story 1 (Authentication)
-4. **STOP and VALIDATE**: Test User Story 1 independently
-5. Deploy/demo if ready
+**Minimum Viable Product** - Users can create and view tasks:
+
+1. Complete Phase 1: Setup (T001-T005)
+2. Complete Phase 2: Foundational (T006-T013) - CRITICAL
+3. Complete Phase 3: User Story 1 (T014-T017) - View task list
+4. Complete Phase 4: User Story 2 (T018-T022) - Create tasks
+5. **STOP and VALIDATE**: Test US1 and US2 independently
+6. Deploy/demo MVP
+
+**MVP Delivers**: Users can create tasks and see their personal task list with complete data isolation.
 
 ### Incremental Delivery
 
+**Recommended approach** - Add one story at a time:
+
 1. Complete Setup + Foundational → Foundation ready
-2. Add User Story 1 → Test independently → Deploy/Demo (MVP!)
-3. Add User Story 2 → Test independently → Deploy/Demo
+2. Add User Story 1 → Test independently → Deploy/Demo
+3. Add User Story 2 → Test independently → Deploy/Demo (MVP!)
 4. Add User Story 3 → Test independently → Deploy/Demo
 5. Add User Story 4 → Test independently → Deploy/Demo
 6. Add User Story 5 → Test independently → Deploy/Demo
-7. Each story adds value without breaking previous stories
+7. Add Polish → Final production-ready version
+
+Each story adds value without breaking previous stories.
 
 ### Parallel Team Strategy
 
 With multiple developers:
 
-1. Team completes Setup + Foundational together
-2. Once Foundational is done:
-   - Developer A: User Story 1 (Authentication)
-   - Developer B: User Story 2 (Create/List Tasks) - can work on backend/frontend structure
-   - Developer C: User Story 3 (Update Tasks) - can work on backend/frontend structure
+1. Team completes Setup + Foundational together (T001-T013)
+2. Once Foundational is done (after T013):
+   - Developer A: User Story 1 (T014-T017)
+   - Developer B: User Story 2 (T018-T022)
+   - Developer C: User Story 3 (T023-T026)
+   - Developer D: User Story 4 (T027-T033)
+   - Developer E: User Story 5 (T034-T038)
 3. Stories complete and integrate independently
+4. Team completes Polish together (T039-T049)
+
+---
+
+## Task Summary
+
+**Total Tasks**: 49 tasks
+
+**Tasks per Phase**:
+- Phase 1 (Setup): 5 tasks
+- Phase 2 (Foundational): 8 tasks (BLOCKING)
+- Phase 3 (US1 - View List): 4 tasks
+- Phase 4 (US2 - Create): 5 tasks
+- Phase 5 (US3 - View Single): 4 tasks
+- Phase 6 (US4 - Update): 7 tasks
+- Phase 7 (US5 - Delete): 5 tasks
+- Phase 8 (Polish): 11 tasks
+
+**Parallel Opportunities**: 15 tasks marked [P] can run in parallel within their phases
+
+**Independent Test Criteria**:
+- US1: Authenticate, create tasks, verify list shows only user's tasks
+- US2: Authenticate, create task, verify it appears in list with correct user_id
+- US3: Create task, retrieve by ID, verify all details returned, test ownership
+- US4: Create task, update fields, verify changes persist, test completion toggle
+- US5: Create task, delete it, verify it's gone from list and returns 404
+
+**MVP Scope**: User Stories 1 & 2 (13 tasks after Setup + Foundational)
 
 ---
 
 ## Notes
 
-- [P] tasks = different files, no dependencies
+- [P] tasks = different files, no dependencies within phase
 - [Story] label maps task to specific user story for traceability
-- Each user story should be independently completable and testable
-- No automated tests per research.md decision (manual validation against acceptance scenarios)
+- Each user story is independently completable and testable
+- No tests included (not requested in specification)
+- All endpoints enforce JWT authentication and data isolation
 - Commit after each task or logical group
 - Stop at any checkpoint to validate story independently
-- Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
-- All task queries MUST filter by authenticated user_id for data isolation
-- All API endpoints MUST verify JWT tokens via deps.py dependency
-- Frontend MUST use API client from lib/api.ts to ensure JWT tokens are attached
+- Follow quickstart.md for manual testing procedures
