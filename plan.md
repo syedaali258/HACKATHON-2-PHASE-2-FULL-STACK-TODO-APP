@@ -1,473 +1,495 @@
+# Implementation Plan: Frontend Application (Next.js App Router)
 
-
-
-# Implementation Plan: Backend API & Database (Task Management Core)
-
-**Branch**: `003-backend-task-api` | **Date**: 2026-02-08 | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `/specs/003-backend-task-api/spec.md`
+**Branch**: `004-nextjs-frontend` | **Date**: 2026-02-08 | **Spec**: [spec.md](./spec.md)
+**Input**: Feature specification from `/specs/004-nextjs-frontend/spec.md`
 
 **Note**: This template is filled in by the `/sp.plan` command. See `.specify/templates/commands/plan.md` for the execution workflow.
 
 ## Summary
 
-Implement a secure, multi-user REST API for task management with persistent storage in Neon Serverless PostgreSQL. The backend enforces JWT-based authentication on all endpoints, extracts user identity exclusively from tokens, and ensures complete data isolation at the database query level. The API supports full CRUD operations (Create, Read, Update, Delete) for tasks, with each task automatically associated with its owner and accessible only by that user.
+Build a modern, responsive, auth-aware web interface using Next.js 16+ App Router that consumes the JWT-protected FastAPI backend. The frontend provides user authentication (signup/signin), protected task dashboard, and complete CRUD operations for task management with strict user data isolation enforced at both UI and API client levels.
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+
-**Primary Dependencies**: FastAPI, SQLModel, Pydantic v2, python-jose[cryptography] (JWT), psycopg2-binary (PostgreSQL driver)
-**Storage**: Neon Serverless PostgreSQL with connection pooling
-**Testing**: pytest with pytest-asyncio for async tests
-**Target Platform**: Web server (Linux/cloud environment, serverless-compatible)
-**Project Type**: Web application (backend API)
-**Performance Goals**: Task creation <2s, list retrieval (1000 tasks) <3s, completion toggle <1s
-**Constraints**: Support 100 concurrent users, JWT authentication required on all endpoints, 99.9% data consistency
-**Scale/Scope**: Multi-user system with user-scoped data isolation, 5 REST endpoints, 1 data model (Task)
+**Language/Version**: TypeScript 5.x with Next.js 16+ (App Router)
+**Primary Dependencies**: Next.js 16+, React 19+, Better Auth (client), Tailwind CSS 3.x, axios or native fetch for API client
+**Storage**: N/A (frontend consumes backend API; JWT tokens stored in httpOnly cookies or localStorage)
+**Testing**: NEEDS CLARIFICATION (not specified in requirements - manual testing assumed)
+**Target Platform**: Modern web browsers (Chrome, Firefox, Safari, Edge - latest 2 versions)
+**Project Type**: Web (frontend application)
+**Performance Goals**: Task creation visible within 3 seconds, user feedback within 1 second, signup completion under 2 minutes, signin completion under 30 seconds
+**Constraints**: Mobile-first responsive design (minimum 320px width), all features accessible on mobile/tablet/desktop, client-side form validation, no direct database access
+**Scale/Scope**: 8 user stories (3 P1, 3 P2, 2 P3), 20 functional requirements, auth + CRUD operations for task management
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-### Principle I: Spec-Driven Development ✅
-- Feature derived from written specification (spec.md)
+### I. Spec-Driven Development ✅ PASS
+- Feature specification exists at `specs/004-nextjs-frontend/spec.md`
+- All 8 user stories documented with priorities (P1-P3)
+- 20 functional requirements defined
 - Following workflow: Spec → Plan → Tasks → Implementation
-- All requirements traceable to spec.md functional requirements (FR-001 through FR-015)
+- No manual coding permitted
 
-### Principle II: Security-First Architecture ✅
-- JWT authentication enforced on all 5 API endpoints
-- User identity extracted exclusively from JWT token (FR-003)
-- No user_id accepted from request parameters or body
-- Data isolation enforced at database query level (FR-004)
-- Unauthorized requests return HTTP 401/403 consistently (FR-013)
-- Token verification using shared secret (BETTER_AUTH_SECRET)
+### II. Security-First Architecture ✅ PASS
+- JWT authentication required for all protected routes (FR-003, FR-004)
+- Tokens stored securely (httpOnly cookies or localStorage with proper handling)
+- User identity derived from JWT token only
+- Unauthenticated users redirected to signin (FR-004)
+- UI displays only authenticated user's tasks (FR-006)
+- Logout functionality clears authentication (FR-013)
 
-### Principle III: Technology Stack Compliance ✅
-- Backend: Python FastAPI (as specified)
-- ORM: SQLModel (as specified)
-- Database: Neon Serverless PostgreSQL (as specified)
-- Authentication: JWT verification (Better Auth integration)
-- No deviations from approved stack
+### III. Technology Stack Compliance ✅ PASS
+- Next.js 16+ with App Router (as specified)
+- Better Auth for authentication (as specified)
+- TypeScript for type safety
+- Tailwind CSS for styling
+- No framework substitutions
 
-### Principle IV: API Contract Enforcement ✅
-- REST API with standard HTTP semantics
-- Endpoints follow RESTful conventions (GET, POST, PUT, DELETE)
-- Appropriate HTTP status codes (200, 201, 400, 401, 403, 404, 500)
+### IV. API Contract Enforcement ✅ PASS
+- Frontend consumes backend exclusively via authenticated API calls
+- No direct database access from frontend
+- JWT token attached to all API requests (FR-003)
+- Proper HTTP status code handling (FR-015, FR-018)
 - API contracts will be documented in contracts/ directory
-- Frontend will consume backend exclusively via authenticated API calls
 
-### Principle V: Data Isolation & Multi-Tenancy ✅
-- Task model includes user_id foreign key for ownership
-- All queries filter by authenticated user's ID
-- No cross-user data access permitted
-- Database schema supports multi-user isolation
-- Persistent storage for all tasks (FR-001)
+### V. Data Isolation & Multi-Tenancy ✅ PASS
+- UI displays only tasks belonging to authenticated user (FR-006)
+- User isolation enforced at API client level (JWT token per user)
+- No cross-user data access possible from frontend
+- Backend enforces data isolation at database level
 
-### Principle VI: Deterministic & Reproducible Builds ✅
-- Following Agentic Dev Stack workflow
-- PHRs will be created for all significant prompts
-- ADRs will be suggested for architectural decisions
+### VI. Deterministic & Reproducible Builds ✅ PASS
+- Following Agentic Dev Stack workflow strictly
+- PHR will be created for this planning phase
 - All changes traceable to spec requirements
+- No manual file edits outside Claude Code workflow
 
-**Gate Status**: ✅ PASSED - No constitution violations detected
+**Overall Status**: ✅ ALL GATES PASSED - Proceeding to Phase 0 Research
 
 ## Project Structure
 
 ### Documentation (this feature)
 
 ```text
-specs/003-backend-task-api/
-├── spec.md              # Feature specification (completed)
+specs/004-nextjs-frontend/
 ├── plan.md              # This file (/sp.plan command output)
-├── research.md          # Phase 0 output (technology best practices)
-├── data-model.md        # Phase 1 output (Task entity schema)
-├── quickstart.md        # Phase 1 output (setup and run instructions)
-├── contracts/           # Phase 1 output (OpenAPI/REST contracts)
-│   └── task-api.yaml    # REST API contract for task endpoints
-├── checklists/          # Quality validation checklists
-│   └── requirements.md  # Spec quality checklist (completed)
+├── research.md          # Phase 0 output (/sp.plan command)
+├── data-model.md        # Phase 1 output (/sp.plan command)
+├── quickstart.md        # Phase 1 output (/sp.plan command)
+├── contracts/           # Phase 1 output (/sp.plan command)
+│   └── frontend-routes.md  # Route definitions and API client contracts
 └── tasks.md             # Phase 2 output (/sp.tasks command - NOT created by /sp.plan)
 ```
 
 ### Source Code (repository root)
 
 ```text
-backend/
+frontend/
 ├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application entry point
-│   ├── config.py            # Configuration and environment variables
-│   ├── database.py          # Database connection and session management
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── task.py          # SQLModel Task entity
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   └── task.py          # Pydantic request/response schemas
+│   ├── (auth)/              # Auth route group (public)
+│   │   ├── signin/
+│   │   │   └── page.tsx     # Sign in page
+│   │   └── signup/
+│   │       └── page.tsx     # Sign up page
+│   ├── (protected)/         # Protected route group (requires auth)
+│   │   └── dashboard/
+│   │       └── page.tsx     # Task dashboard
+│   ├── layout.tsx           # Root layout
+│   ├── page.tsx             # Landing/redirect page
+│   └── globals.css          # Global styles
+├── components/
+│   ├── auth/
+│   │   ├── SignInForm.tsx   # Sign in form component
+│   │   └── SignUpForm.tsx   # Sign up form component
+│   ├── tasks/
+│   │   ├── TaskList.tsx     # Task list display
+│   │   ├── TaskItem.tsx     # Individual task item
+│   │   ├── CreateTaskForm.tsx  # Task creation form
+│   │   ├── EditTaskModal.tsx   # Task edit modal
+│   │   └── DeleteConfirmDialog.tsx  # Delete confirmation
+│   └── ui/
+│       ├── Button.tsx       # Reusable button component
+│       ├── Input.tsx        # Reusable input component
+│       └── LoadingSpinner.tsx  # Loading indicator
+├── lib/
 │   ├── api/
-│   │   ├── __init__.py
-│   │   ├── deps.py          # Dependency injection (JWT verification)
-│   │   └── routes/
-│   │       ├── __init__.py
-│   │       └── tasks.py     # Task CRUD endpoints
-│   └── core/
-│       ├── __init__.py
-│       └── security.py      # JWT verification utilities
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py          # Pytest fixtures
-│   ├── test_auth.py         # Authentication tests
-│   ├── test_tasks.py        # Task CRUD tests
-│   └── test_isolation.py    # Data isolation tests
-├── requirements.txt         # Python dependencies
-├── .env.example             # Environment variable template
-└── README.md                # Backend setup instructions
+│   │   ├── client.ts        # API client with JWT attachment
+│   │   └── tasks.ts         # Task API methods
+│   ├── auth/
+│   │   ├── better-auth.ts   # Better Auth configuration
+│   │   └── session.ts       # Session management utilities
+│   └── utils/
+│       └── validation.ts    # Form validation helpers
+├── middleware.ts            # Route protection middleware
+├── types/
+│   └── task.ts              # TypeScript types for Task entity
+├── .env.example             # Environment variables template
+├── .env.local               # Local environment variables (gitignored)
+├── next.config.js           # Next.js configuration
+├── tailwind.config.js       # Tailwind CSS configuration
+├── tsconfig.json            # TypeScript configuration
+└── package.json             # Dependencies
 ```
 
-**Structure Decision**: Web application structure with backend focus. The backend/ directory contains the FastAPI application organized by layers: models (database entities), schemas (API contracts), api/routes (endpoints), and core (shared utilities). This structure supports clear separation of concerns and aligns with FastAPI best practices.
+**Structure Decision**: Web application structure with `frontend/` directory. Using Next.js 16+ App Router with route groups for auth (public) and protected routes. Components organized by feature (auth, tasks, ui). API client layer in `lib/api/` with automatic JWT attachment. Better Auth integration in `lib/auth/`. Middleware for route protection at the root level.
 
 ## Complexity Tracking
 
 > **Fill ONLY if Constitution Check has violations that must be justified**
 
-No violations detected. All constitution principles are satisfied by the planned implementation.
-
----
-
-## Phase 0: Research & Technology Decisions
-
-### Research Tasks
-
-1. **FastAPI JWT Authentication Patterns**
-   - Research: Best practices for JWT verification in FastAPI
-   - Research: Dependency injection patterns for user context
-   - Research: Error handling for authentication failures
-
-2. **SQLModel with Neon PostgreSQL**
-   - Research: Connection pooling strategies for Neon serverless
-   - Research: Async database operations with SQLModel
-   - Research: Migration strategies (Alembic integration)
-
-3. **Data Isolation Patterns**
-   - Research: Query-level filtering patterns in SQLModel
-   - Research: Preventing N+1 queries with user-scoped data
-   - Research: Index optimization for user_id columns
-
-4. **API Error Handling**
-   - Research: Consistent error response formats in FastAPI
-   - Research: HTTP status code conventions for REST APIs
-   - Research: Validation error handling with Pydantic v2
-
-### Research Output Location
-
-All research findings will be consolidated in `specs/003-backend-task-api/research.md` with the following structure:
-- Decision: [what was chosen]
-- Rationale: [why chosen]
-- Alternatives considered: [what else evaluated]
-- Implementation guidance: [how to apply]
-
----
-
-## Phase 1: Design & Contracts
-
-### Data Model Design
-
-**Output**: `specs/003-backend-task-api/data-model.md`
-
-**Task Entity** (from spec.md Key Entities):
-- `id`: Unique identifier (UUID or auto-increment integer)
-- `user_id`: Foreign key to user (from authentication system)
-- `title`: String, required, max 200 characters
-- `description`: String, optional, max 2000 characters
-- `is_completed`: Boolean, default False
-- `created_at`: Timestamp, auto-generated
-- `updated_at`: Timestamp, auto-updated
-
-**Relationships**:
-- Task belongs to User (many-to-one)
-- User has many Tasks (one-to-many)
-
-**Constraints**:
-- `user_id` NOT NULL
-- Index on `user_id` for query performance
-- Unique constraint on `id`
-
-### API Contract Design
-
-**Output**: `specs/003-backend-task-api/contracts/task-api.yaml`
-
-**Endpoints** (from spec.md API scope and functional requirements):
-
-1. **GET /api/tasks** - List all tasks for authenticated user
-   - Auth: Required (JWT)
-   - Response: 200 (array of tasks), 401 (unauthorized)
-   - Query params: None (filtered by JWT user_id)
-
-2. **POST /api/tasks** - Create new task
-   - Auth: Required (JWT)
-   - Request body: `{ title: string, description?: string, is_completed?: boolean }`
-   - Response: 201 (created task), 400 (validation error), 401 (unauthorized)
-   - Auto-assigns user_id from JWT
-
-3. **GET /api/tasks/{id}** - Get single task by ID
-   - Auth: Required (JWT)
-   - Response: 200 (task), 401 (unauthorized), 403 (not owner), 404 (not found)
-   - Ownership verification required
-
-4. **PUT /api/tasks/{id}** - Update task
-   - Auth: Required (JWT)
-   - Request body: `{ title?: string, description?: string, is_completed?: boolean }`
-   - Response: 200 (updated task), 400 (validation error), 401 (unauthorized), 403 (not owner), 404 (not found)
-   - Ownership verification required
-
-5. **DELETE /api/tasks/{id}** - Delete task
-   - Auth: Required (JWT)
-   - Response: 204 (no content), 401 (unauthorized), 403 (not owner), 404 (not found)
-   - Ownership verification required
-
-**Note**: The original spec mentioned `/api/{user_id}/tasks` pattern, but per constitution Principle II (Security-First), user_id MUST be derived from JWT, not URL parameters. The API will use `/api/tasks` and filter by the authenticated user's ID extracted from the token.
-
-### Quickstart Guide
-
-**Output**: `specs/003-backend-task-api/quickstart.md`
-
-Will include:
-- Environment setup (Python 3.11+, virtual environment)
-- Dependency installation (requirements.txt)
-- Environment variables (.env configuration)
-- Database connection setup (Neon PostgreSQL)
-- Running the development server
-- Testing the API (curl examples with JWT)
-- Running tests (pytest)
-
----
-
-## Phase 2: Task Generation
-
-**Note**: Phase 2 (task generation) is handled by the `/sp.tasks` command, NOT by `/sp.plan`.
-
-The `/sp.tasks` command will generate `specs/003-backend-task-api/tasks.md` with actionable implementation tasks organized by user story priority (P1 → P2 → P3).
+No violations - all constitution principles satisfied.
 
 ---
 
 ## Architectural Decisions
 
-### Decision 1: JWT Verification Strategy
+### Decision 1: JWT Token Storage Strategy
 
-**Context**: Need to verify JWT tokens on every request and extract user identity.
+**Context**: Need to securely store JWT tokens on the frontend for authenticated API requests.
 
-**Decision**: Use FastAPI dependency injection with a `get_current_user` dependency that:
-1. Extracts JWT from Authorization header (Bearer token)
-2. Verifies signature using BETTER_AUTH_SECRET
-3. Validates expiration
-4. Extracts user_id from token claims
-5. Returns user_id to route handlers
+**Options Considered**:
+1. **httpOnly cookies** (chosen)
+2. localStorage
+3. sessionStorage
+4. Memory only
 
-**Rationale**:
-- Dependency injection is idiomatic FastAPI pattern
-- Centralizes authentication logic (DRY principle)
-- Automatically handles 401 responses for invalid tokens
-- Makes user_id available to all protected routes
-
-**Alternatives Considered**:
-- Middleware: More complex, harder to test individual routes
-- Manual verification in each route: Violates DRY, error-prone
-
-### Decision 2: Database Connection Pooling
-
-**Context**: Neon Serverless PostgreSQL requires efficient connection management.
-
-**Decision**: Use SQLModel with async SQLAlchemy engine and connection pooling configured for serverless:
-- Pool size: 5-10 connections
-- Max overflow: 10
-- Pool recycle: 3600 seconds (1 hour)
-- Pool pre-ping: True (verify connections before use)
+**Decision**: Use httpOnly cookies as primary storage mechanism
 
 **Rationale**:
-- Neon serverless benefits from connection reuse
-- Pre-ping prevents stale connection errors
-- Pool recycle handles Neon's connection lifecycle
-- Async operations improve concurrency
+- **Security**: httpOnly cookies cannot be accessed by JavaScript, providing XSS protection
+- **Automatic transmission**: Cookies sent automatically with every request to same domain
+- **Better Auth support**: Built-in support for httpOnly cookie mode
+- **Production-ready**: Secure flag ensures HTTPS-only transmission in production
+- **CSRF protection**: SameSite=lax attribute prevents cross-site request forgery
 
-**Alternatives Considered**:
-- No pooling: Poor performance, connection overhead
-- Large pool: Wastes resources in serverless environment
+**Trade-offs**:
+- Requires backend and frontend on same domain (or proper CORS configuration)
+- Slightly more complex setup than localStorage
+- Cannot be accessed by JavaScript (but this is a security feature, not a limitation)
 
-### Decision 3: User ID Source of Truth
+**Alternatives Rejected**:
+- localStorage: Vulnerable to XSS attacks, easier to implement but less secure
+- sessionStorage: Lost on tab close, poor UX for persistent sessions
+- Memory only: Lost on page refresh, terrible UX
 
-**Context**: Original spec mentioned `/api/{user_id}/tasks` pattern, but constitution requires JWT-only user identity.
+---
 
-**Decision**: Remove user_id from URL paths. Use `/api/tasks` and filter by JWT-extracted user_id.
+### Decision 2: Route Protection Mechanism
+
+**Context**: Need to prevent unauthenticated users from accessing protected pages.
+
+**Options Considered**:
+1. **Next.js middleware** (chosen)
+2. Component-level checks with HOCs
+3. Server Component checks only
+4. Client-side checks only
+
+**Decision**: Use Next.js middleware.ts for centralized route protection
 
 **Rationale**:
-- Constitution Principle II: "User identity MUST be derived only from JWT, never from client input"
-- Prevents user impersonation attacks
-- Simplifies API contract (no user_id parameter validation)
-- Aligns with security-first architecture
+- **Edge runtime**: Runs before page rendering, fast redirects
+- **Centralized logic**: Single source of truth for authentication checks (DRY)
+- **Pattern matching**: Supports route groups and wildcards
+- **No flash of content**: Redirects before any component renders
+- **Works with both**: Server Components and Client Components
 
-**Alternatives Considered**:
-- URL parameter with verification: Redundant, confusing, potential security risk if verification fails
+**Trade-offs**:
+- Middleware runs on every request (but very fast on edge)
+- Cannot access React context or hooks
+- Limited to cookie-based authentication (but that's our choice anyway)
 
-### Decision 4: Error Response Format
+**Alternatives Rejected**:
+- Component-level checks: Duplicated logic, flash of wrong content before redirect
+- Server Component checks only: Doesn't prevent client-side navigation
+- Client-side checks only: Not secure, can be bypassed
 
-**Context**: Need consistent error responses across all endpoints.
+---
 
-**Decision**: Use standardized error response format:
-```json
-{
-  "detail": "Human-readable error message",
-  "error_code": "MACHINE_READABLE_CODE",
-  "status_code": 401
-}
+### Decision 3: API Client Implementation
+
+**Context**: Need to make authenticated API calls to the FastAPI backend.
+
+**Options Considered**:
+1. **Axios with interceptors** (chosen)
+2. Native fetch with manual token attachment
+3. SWR/React Query with custom fetcher
+4. GraphQL client (Apollo/urql)
+
+**Decision**: Use axios with request/response interceptors
+
+**Rationale**:
+- **Automatic JWT attachment**: Request interceptor adds token to all requests
+- **Centralized error handling**: Response interceptor handles 401 errors globally
+- **Type safety**: Works well with TypeScript
+- **Familiar API**: Similar to fetch but with more features
+- **Interceptors**: Powerful middleware pattern for cross-cutting concerns
+
+**Trade-offs**:
+- Adds ~13KB to bundle size (but worth it for features)
+- Another dependency to maintain
+- Slightly different API than native fetch
+
+**Alternatives Rejected**:
+- Native fetch: More boilerplate, no interceptors, manual token attachment everywhere
+- SWR/React Query: Overkill for simple CRUD, adds complexity, caching not needed
+- GraphQL: Not aligned with REST API requirement, backend is REST
+
+---
+
+### Decision 4: Form Validation Strategy
+
+**Context**: Need to validate user input before sending to API.
+
+**Options Considered**:
+1. **Zod + react-hook-form** (chosen)
+2. Manual validation with useState
+3. Yup + Formik
+4. HTML5 validation only
+
+**Decision**: Use Zod for schema validation with react-hook-form for form state
+
+**Rationale**:
+- **Type safety**: Zod is TypeScript-first, provides type inference
+- **Reusable schemas**: Define once, use everywhere (client and server)
+- **Integration**: @hookform/resolvers provides seamless integration
+- **DRY principle**: Types inferred from schemas, no duplication
+- **Validation rules match backend**: Ensures consistency
+
+**Trade-offs**:
+- Two dependencies instead of one
+- Learning curve for Zod syntax
+- Slightly larger bundle than manual validation
+
+**Alternatives Rejected**:
+- Manual validation: Error-prone, not type-safe, lots of boilerplate
+- Yup: Less TypeScript-friendly than Zod, older library
+- HTML5 validation only: Not sufficient for complex rules, poor UX
+
+---
+
+### Decision 5: State Management Approach
+
+**Context**: Need to manage task list state and UI state.
+
+**Options Considered**:
+1. **React hooks (useState/useEffect)** (chosen)
+2. Redux Toolkit
+3. Zustand
+4. React Query for server state
+
+**Decision**: Use React hooks for component-level state management
+
+**Rationale**:
+- **Simplicity**: Simple CRUD operations don't need complex state management
+- **Built-in**: No additional dependencies
+- **Sufficient**: Component-level state adequate for this scope
+- **Optimistic updates**: Easy to implement with useState
+- **No global state needed**: Each page manages its own state
+
+**Trade-offs**:
+- State not shared across components (but we don't need that)
+- No built-in caching (but we don't need that either)
+- Manual optimistic updates (but gives us full control)
+
+**Alternatives Rejected**:
+- Redux: Massive overkill for simple CRUD, adds complexity and boilerplate
+- Zustand: Unnecessary for component-level state, no global state needed
+- React Query: Adds complexity, caching not required for this scope
+
+---
+
+### Decision 6: Styling Approach
+
+**Context**: Need to style components with responsive design.
+
+**Options Considered**:
+1. **Tailwind CSS utility classes** (chosen)
+2. CSS Modules
+3. Styled Components (CSS-in-JS)
+4. Plain CSS
+
+**Decision**: Use Tailwind CSS with mobile-first utility classes
+
+**Rationale**:
+- **Mobile-first**: Aligns with requirement (minimum 320px width)
+- **Utility classes**: Reduces CSS bundle size via tree-shaking
+- **Design system**: Consistent spacing, colors, typography out of the box
+- **No runtime overhead**: Unlike CSS-in-JS solutions
+- **Developer experience**: Fast iteration, no context switching
+
+**Trade-offs**:
+- Verbose class names in JSX
+- Learning curve for utility-first approach
+- Requires Tailwind configuration
+
+**Alternatives Rejected**:
+- CSS Modules: More boilerplate, harder to maintain consistency
+- Styled Components: Runtime overhead, not aligned with Next.js best practices
+- Plain CSS: No design system, harder to maintain, larger bundle
+
+---
+
+### Decision 7: Component Architecture
+
+**Context**: Need to organize React components for maintainability.
+
+**Options Considered**:
+1. **Feature-based organization** (chosen)
+2. Flat components directory
+3. Atomic design (atoms/molecules/organisms)
+4. Page-based organization
+
+**Decision**: Organize components by feature (auth, tasks, ui)
+
+**Rationale**:
+- **Colocation**: Related components grouped together
+- **Scalability**: Easy to add new features without reorganizing
+- **Clear boundaries**: Each feature is self-contained
+- **Reusability**: UI components separated for cross-feature use
+
+**Structure**:
+```
+components/
+├── auth/        # Authentication-specific components
+├── tasks/       # Task management components
+└── ui/          # Reusable UI components (buttons, inputs, etc.)
 ```
 
+**Trade-offs**:
+- Some components might fit in multiple categories
+- Need to decide where shared components go
+
+**Alternatives Rejected**:
+- Flat directory: Becomes unwieldy as project grows
+- Atomic design: Too complex for this scope, over-engineering
+- Page-based: Doesn't promote reusability across pages
+
+---
+
+### Decision 8: Error Handling Strategy
+
+**Context**: Need to handle errors gracefully across the application.
+
+**Options Considered**:
+1. **Next.js error boundaries (error.tsx) + API client interceptor** (chosen)
+2. Try-catch in every component
+3. Global error boundary only
+4. Toast notifications only
+
+**Decision**: Use Next.js error.tsx files with API client error interceptor
+
 **Rationale**:
-- FastAPI's HTTPException provides this structure by default
-- Consistent format aids frontend error handling
-- Machine-readable codes enable error categorization
-- Aligns with REST API best practices
+- **Built-in support**: Next.js App Router provides error.tsx pattern
+- **Granular recovery**: Each route can have its own error handling
+- **Automatic**: Catches unhandled errors during rendering
+- **Centralized API errors**: Interceptor handles 401 globally
+- **User-friendly**: Provides recovery options (retry button)
 
-**Alternatives Considered**:
-- Custom error classes: Over-engineering for this scope
-- Plain string errors: Harder for frontend to parse
+**Trade-offs**:
+- Need to create error.tsx for each route that needs custom handling
+- Error boundaries don't catch errors in event handlers (need try-catch there)
 
----
-
-## Implementation Sequence
-
-**Note**: Detailed tasks will be generated by `/sp.tasks` command.
-
-**High-Level Sequence** (by user story priority):
-
-1. **Foundation** (Prerequisites for P1):
-   - Setup FastAPI project structure
-   - Configure database connection to Neon
-   - Implement JWT verification dependency
-   - Create Task SQLModel entity
-
-2. **P1 User Stories** (View & Create):
-   - Implement GET /api/tasks (list tasks)
-   - Implement POST /api/tasks (create task)
-   - Test data isolation with multiple users
-
-3. **P2 User Stories** (View Details & Update):
-   - Implement GET /api/tasks/{id} (get single task)
-   - Implement PUT /api/tasks/{id} (update task)
-   - Test ownership verification
-
-4. **P3 User Stories** (Delete):
-   - Implement DELETE /api/tasks/{id} (delete task)
-   - Test complete CRUD lifecycle
-
-5. **Hardening**:
-   - Add comprehensive error handling
-   - Validate all edge cases from spec
-   - Performance testing (concurrent users)
-   - Security audit (data isolation verification)
+**Alternatives Rejected**:
+- Try-catch everywhere: Duplicated logic, easy to miss
+- Global error boundary only: Less granular, harder to recover
+- Toast notifications only: No fallback UI for critical errors
 
 ---
 
-## Testing Strategy
+## Post-Design Constitution Check
 
-### Test Categories
+*Re-evaluation after Phase 1 design artifacts completed*
 
-1. **Authentication Tests** (`tests/test_auth.py`):
-   - Valid JWT accepted
-   - Invalid JWT rejected (401)
-   - Expired JWT rejected (401)
-   - Missing JWT rejected (401)
-   - Malformed JWT rejected (401)
+### I. Spec-Driven Development ✅ PASS
+- All design decisions traced to spec requirements
+- research.md resolves all technical unknowns
+- data-model.md defines types matching backend contracts
+- contracts/ documents all routes and API interactions
+- quickstart.md provides reproducible setup instructions
 
-2. **CRUD Operation Tests** (`tests/test_tasks.py`):
-   - Create task with valid data (201)
-   - Create task with missing title (400)
-   - List tasks returns only user's tasks (200)
-   - Get task by ID returns correct task (200)
-   - Update task modifies fields (200)
-   - Toggle completion status (200)
-   - Delete task removes it (204)
+### II. Security-First Architecture ✅ PASS
+- httpOnly cookies chosen for XSS protection (Decision 1)
+- Middleware enforces authentication before page load (Decision 2)
+- API client automatically attaches JWT to all requests (Decision 3)
+- 401 errors trigger automatic sign out and redirect
+- No sensitive data stored in frontend state
 
-3. **Data Isolation Tests** (`tests/test_isolation.py`):
-   - User A cannot access User B's tasks (403)
-   - User A cannot update User B's tasks (403)
-   - User A cannot delete User B's tasks (403)
-   - Task list filtered by user_id
-   - Concurrent operations don't leak data
+### III. Technology Stack Compliance ✅ PASS
+- Next.js 16+ App Router confirmed in all design artifacts
+- Better Auth integration documented in research.md
+- TypeScript types defined in data-model.md
+- Tailwind CSS chosen for styling (Decision 6)
+- All dependencies align with approved stack
 
-4. **Edge Case Tests**:
-   - Non-existent task ID (404)
-   - Extremely long title/description (400)
-   - Concurrent updates to same task
-   - Database connection failure handling
+### IV. API Contract Enforcement ✅ PASS
+- API client contract documented in contracts/api-client.md
+- All endpoints match backend API exactly
+- Type definitions match backend Pydantic schemas
+- Error handling covers all HTTP status codes
+- No direct database access from frontend
 
-### Test Data
+### V. Data Isolation & Multi-Tenancy ✅ PASS
+- JWT token identifies user on every request
+- Backend enforces data isolation at query level
+- Frontend trusts backend for data filtering
+- No cross-user data access possible
+- User ID never sent from client (only from JWT)
 
-- Use pytest fixtures for test users and JWT tokens
-- Create isolated test database or use transactions with rollback
-- Mock JWT verification for unit tests
-- Use real JWT for integration tests
+### VI. Deterministic & Reproducible Builds ✅ PASS
+- All design artifacts created via /sp.plan workflow
+- Architectural decisions documented with rationale
+- quickstart.md provides step-by-step setup
+- Environment variables templated in .env.example
+- No manual configuration required
 
----
-
-## Deployment Considerations
-
-### Environment Variables
-
-Required environment variables (documented in .env.example):
-- `DATABASE_URL`: Neon PostgreSQL connection string
-- `BETTER_AUTH_SECRET`: JWT verification secret (shared with auth service)
-- `JWT_ALGORITHM`: JWT signing algorithm (default: HS256)
-- `ENVIRONMENT`: dev/staging/production
-
-### Database Migrations
-
-- Use Alembic for schema migrations if needed
-- Initial migration creates tasks table with indexes
-- Migrations must preserve data isolation constraints
-
-### Monitoring & Observability
-
-- Log all authentication failures (security monitoring)
-- Log database connection errors
-- Track API response times (performance monitoring)
-- Monitor data isolation violations (should be zero)
+**Overall Status**: ✅ ALL GATES PASSED - Ready for /sp.tasks phase
 
 ---
 
-## Success Validation
+## Summary
 
-### Acceptance Criteria Mapping
+**Planning Complete**: All Phase 0 and Phase 1 artifacts generated successfully.
 
-Each success criterion from spec.md will be validated:
+**Artifacts Created**:
+1. ✅ `plan.md` - This file (implementation plan with architectural decisions)
+2. ✅ `research.md` - Technical research resolving all unknowns (9 research areas)
+3. ✅ `data-model.md` - TypeScript types and validation schemas
+4. ✅ `contracts/frontend-routes.md` - Route definitions and navigation flows
+5. ✅ `contracts/api-client.md` - API client interface and error handling
+6. ✅ `quickstart.md` - Setup and development instructions
 
-- **SC-001** (Task creation <2s): Performance test with timer
-- **SC-002** (List 1000 tasks <3s): Load test with large dataset
-- **SC-003** (100% ownership enforcement): Data isolation test suite
-- **SC-004** (99.9% data consistency): Integration tests with database verification
-- **SC-005** (100% auth rejection): Authentication test suite
-- **SC-006** (Toggle <1s): Performance test for update operations
-- **SC-007** (100 concurrent users): Load test with concurrent requests
-- **SC-008** (Consistent responses): Contract validation tests
+**Key Decisions**:
+- httpOnly cookies for secure JWT storage
+- Next.js middleware for centralized route protection
+- Axios with interceptors for API client
+- Zod + react-hook-form for type-safe validation
+- React hooks for simple state management
+- Tailwind CSS for mobile-first responsive design
+- Feature-based component organization
+- Next.js error boundaries for error handling
 
-### Definition of Done
+**Technology Stack Confirmed**:
+- Next.js 16+ (App Router)
+- React 19+
+- TypeScript 5.x
+- Better Auth (client)
+- Tailwind CSS 3.x
+- Axios 1.6+
+- Zod 3.22+
+- react-hook-form 7.49+
 
-- [ ] All 5 REST endpoints implemented and tested
-- [ ] JWT authentication enforced on all endpoints
-- [ ] Data isolation verified with multi-user tests
-- [ ] All functional requirements (FR-001 to FR-015) satisfied
-- [ ] All success criteria (SC-001 to SC-008) validated
-- [ ] API contracts documented in OpenAPI format
-- [ ] Quickstart guide enables new developers to run the API
-- [ ] No constitution violations
-- [ ] All tests passing (>90% coverage)
+**Next Steps**:
+1. Run `/sp.tasks` to generate actionable task list
+2. Tasks will be organized by user story (US1-US8)
+3. Implementation will follow priority order (P1 → P2 → P3)
+4. Each user story independently testable
 
----
+**Dependencies**:
+- Backend API must be running at http://localhost:8000
+- Better Auth must be configured and operational
+- Neon PostgreSQL database must be accessible
+- CORS must allow requests from http://localhost:3000
 
-## Next Steps
-
-1. **Execute Phase 0**: Generate research.md with technology best practices
-2. **Execute Phase 1**: Generate data-model.md, contracts/, and quickstart.md
-3. **Update Agent Context**: Run agent context update script
-4. **Re-validate Constitution**: Confirm no violations after design phase
-5. **Proceed to /sp.tasks**: Generate actionable implementation tasks
-
-**Command to continue**: `/sp.tasks` (after this plan is approved)
+**No Blockers**: All technical unknowns resolved, ready to proceed to task generation.

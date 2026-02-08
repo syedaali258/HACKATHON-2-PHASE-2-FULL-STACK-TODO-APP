@@ -1,448 +1,434 @@
-# Quickstart Guide: Backend API & Database
+# Quickstart Guide: Frontend Application (Next.js App Router)
 
-**Feature**: Backend API & Database (Task Management Core)
+**Feature**: 004-nextjs-frontend
 **Date**: 2026-02-08
-**Phase**: Phase 1 - Design & Contracts
-
-## Overview
-
-This guide helps you set up and run the FastAPI backend for the task management system. The backend provides secure, JWT-authenticated REST API endpoints with persistent storage in Neon Serverless PostgreSQL.
-
----
+**Purpose**: Setup and development instructions for the Next.js frontend application
 
 ## Prerequisites
 
-- **Python**: 3.11 or higher
-- **Neon PostgreSQL**: Account and database created at [neon.tech](https://neon.tech)
-- **Better Auth**: Authentication system configured and issuing JWT tokens
-- **Git**: For version control
-- **Code Editor**: VS Code, PyCharm, or similar
+- Node.js 20.x or higher
+- npm or yarn package manager
+- Backend API running at `http://localhost:8000` (see backend README)
+- Better Auth configured and operational
+- Modern web browser (Chrome, Firefox, Safari, or Edge)
 
 ---
 
 ## Initial Setup
 
-### 1. Clone Repository
+### 1. Install Dependencies
 
 ```bash
-cd HACKATHON-PHASE-2
+cd frontend
+npm install
 ```
 
-### 2. Create Virtual Environment
+**Dependencies installed**:
+- next@^16.0.0
+- react@^19.0.0
+- react-dom@^19.0.0
+- better-auth@latest
+- axios@^1.6.0
+- zod@^3.22.0
+- react-hook-form@^7.49.0
+- @hookform/resolvers@^3.3.0
+- tailwindcss@^3.4.0
+- typescript@^5.3.0
 
-**Windows (PowerShell)**:
-```powershell
-cd backend
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-```
+### 2. Configure Environment Variables
 
-**macOS/Linux**:
+Create `.env.local` file in the `frontend/` directory:
+
 ```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
+# Copy from example
+cp .env.example .env.local
 ```
 
-### 3. Install Dependencies
+Edit `.env.local` with your configuration:
 
-Create `backend/requirements.txt`:
-```txt
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-sqlmodel==0.0.14
-asyncpg==0.29.0
-pydantic==2.5.3
-python-jose[cryptography]==3.3.0
-python-dotenv==1.0.0
-alembic==1.13.1
-pytest==7.4.4
-pytest-asyncio==0.23.3
-httpx==0.26.0
-```
-
-Install:
 ```bash
-pip install -r requirements.txt
+# Backend API URL
+NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# Better Auth URL (usually same as frontend URL)
+NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
+
+# Environment
+NODE_ENV=development
 ```
 
-### 4. Configure Environment Variables
+**Important**: Never commit `.env.local` to version control (already in .gitignore)
 
-Create `backend/.env`:
-```env
-# Database
-DATABASE_URL=postgresql+asyncpg://user:password@ep-xxx.neon.tech/dbname?sslmode=require
+### 3. Verify Backend Connection
 
-# JWT Authentication
-BETTER_AUTH_SECRET=your-secret-key-here
-JWT_ALGORITHM=HS256
+Ensure the backend API is running and accessible:
 
-# Application
-ENVIRONMENT=development
-DEBUG=true
+```bash
+# Test backend health endpoint
+curl http://localhost:8000/health
 ```
 
-**Important**:
-- Replace `DATABASE_URL` with your Neon PostgreSQL connection string
-- Replace `BETTER_AUTH_SECRET` with the same secret used by Better Auth
-- Never commit `.env` to version control
-
-Create `backend/.env.example` (for documentation):
-```env
-DATABASE_URL=postgresql+asyncpg://user:password@host/dbname
-BETTER_AUTH_SECRET=your-secret-key
-JWT_ALGORITHM=HS256
-ENVIRONMENT=development
-DEBUG=true
+Expected response:
+```json
+{"status": "healthy"}
 ```
 
 ---
 
-## Project Structure
+## Development
 
+### Start Development Server
+
+```bash
+npm run dev
 ```
-backend/
-├── app/
-│   ├── __init__.py
-│   ├── main.py              # FastAPI application entry point
-│   ├── config.py            # Configuration and environment variables
-│   ├── database.py          # Database connection and session management
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── task.py          # SQLModel Task entity
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   └── task.py          # Pydantic request/response schemas
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── deps.py          # Dependency injection (JWT verification)
-│   │   └── routes/
-│   │       ├── __init__.py
-│   │       └── tasks.py     # Task CRUD endpoints
-│   └── core/
-│       ├── __init__.py
-│       └── security.py      # JWT verification utilities
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py          # Pytest fixtures
-│   ├── test_auth.py         # Authentication tests
-│   ├── test_tasks.py        # Task CRUD tests
-│   └── test_isolation.py    # Data isolation tests
-├── alembic/                 # Database migrations
-├── requirements.txt         # Python dependencies
-├── .env                     # Environment variables (not in git)
-├── .env.example             # Environment template
-└── README.md                # Backend documentation
+
+The application will be available at: **http://localhost:3000**
+
+**What happens on startup**:
+1. Next.js compiles the application
+2. Development server starts on port 3000
+3. Hot module replacement (HMR) enabled
+4. TypeScript type checking in watch mode
+
+### Development Workflow
+
+1. **Make changes** to files in `app/`, `components/`, or `lib/`
+2. **Save the file** - changes appear automatically (HMR)
+3. **Check browser** - see updates without manual refresh
+4. **Check terminal** - see TypeScript errors and warnings
+
+### Available Scripts
+
+```bash
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server (after build)
+npm start
+
+# Run TypeScript type checking
+npm run type-check
+
+# Run ESLint
+npm run lint
+
+# Format code with Prettier (if configured)
+npm run format
 ```
 
 ---
 
-## Database Setup
+## Testing the Application
 
-### 1. Get Neon Connection String
+### Manual Testing Checklist
 
-1. Log in to [Neon Console](https://console.neon.tech)
-2. Select your project
-3. Copy the connection string from the dashboard
-4. Replace `postgresql://` with `postgresql+asyncpg://` for async support
-5. Add to `.env` as `DATABASE_URL`
-
-### 2. Initialize Database
-
-The database tables will be created automatically when you run the application for the first time (using SQLModel's `create_all`).
-
-**For production**, use Alembic migrations:
-
+#### Authentication Flow
 ```bash
-# Initialize Alembic (first time only)
-alembic init alembic
+# 1. Visit http://localhost:3000
+# Expected: Redirect to /signin
 
-# Create migration
-alembic revision --autogenerate -m "Create tasks table"
+# 2. Click "Sign up" link
+# Expected: Navigate to /signup
 
-# Apply migration
-alembic upgrade head
+# 3. Fill in signup form:
+#    - Email: test@example.com
+#    - Password: password123
+#    - Name: Test User (optional)
+# Expected: Account created, auto sign in, redirect to /dashboard
+
+# 4. Click "Logout"
+# Expected: Sign out, redirect to /signin
+
+# 5. Sign in with credentials
+# Expected: Redirect to /dashboard
+```
+
+#### Task Management Flow
+```bash
+# 1. On dashboard, click "Create Task"
+# Expected: Show create task form
+
+# 2. Fill in task details:
+#    - Title: "Complete project"
+#    - Description: "Finish the hackathon" (optional)
+# Expected: Task created, appears in list immediately
+
+# 3. Click completion checkbox
+# Expected: Task marked as complete, visual update
+
+# 4. Click "Edit" on task
+# Expected: Show edit modal with current values
+
+# 5. Update task title
+# Expected: Changes saved, modal closes, list updates
+
+# 6. Click "Delete" on task
+# Expected: Confirmation dialog appears
+
+# 7. Confirm deletion
+# Expected: Task removed from list
+```
+
+#### Responsive Design Testing
+```bash
+# 1. Open browser DevTools (F12)
+# 2. Toggle device toolbar (Ctrl+Shift+M)
+# 3. Test different screen sizes:
+#    - Mobile: 320px, 375px, 414px
+#    - Tablet: 768px, 1024px
+#    - Desktop: 1280px, 1920px
+# Expected: Layout adapts, all features accessible
+```
+
+#### Error Handling Testing
+```bash
+# 1. Stop backend API server
+# 2. Try to create a task
+# Expected: Error message "Failed to create task"
+
+# 3. Restart backend API
+# 4. Click retry
+# Expected: Task created successfully
+
+# 5. Sign in with wrong password
+# Expected: Error message "Invalid credentials"
+
+# 6. Try to create task with empty title
+# Expected: Validation error "Title is required"
 ```
 
 ---
 
-## Running the Application
+## API Integration Testing
 
-### Development Server
+### Test API Client with curl
 
 ```bash
-cd backend
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Options**:
-- `--reload`: Auto-reload on code changes
-- `--host 0.0.0.0`: Accept connections from any IP
-- `--port 8000`: Run on port 8000
-
-**Output**:
-```
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [12345] using StatReload
-INFO:     Started server process [12346]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-```
-
-### Verify Server is Running
-
-Open browser to: http://localhost:8000/docs
-
-You should see the FastAPI interactive API documentation (Swagger UI).
-
----
-
-## Testing the API
-
-### 1. Get a JWT Token
-
-**Option A**: Use Better Auth to authenticate and get a token
-
-**Option B**: For testing, create a test token:
-
-```python
-from jose import jwt
-from datetime import datetime, timedelta
-
-secret = "your-secret-key"
-payload = {
-    "sub": "test_user_123",  # user_id
-    "exp": datetime.utcnow() + timedelta(hours=1)
-}
-token = jwt.encode(payload, secret, algorithm="HS256")
-print(token)
-```
-
-### 2. Test Endpoints with curl
-
-**Create a task**:
-```bash
-curl -X POST http://localhost:8000/api/tasks \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+# 1. Sign up a user (via Better Auth)
+curl -X POST http://localhost:3000/api/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "Buy groceries",
-    "description": "Milk, eggs, bread",
-    "is_completed": false
-  }'
-```
+  -d '{"email":"test@example.com","password":"password123"}'
 
-**List all tasks**:
-```bash
+# 2. Sign in to get JWT token
+curl -X POST http://localhost:3000/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}' \
+  -c cookies.txt
+
+# 3. Create a task (with JWT from cookies)
+curl -X POST http://localhost:8000/api/tasks \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{"title":"Test task","description":"Testing API"}'
+
+# 4. List all tasks
 curl -X GET http://localhost:8000/api/tasks \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
 
-**Get a single task**:
-```bash
-curl -X GET http://localhost:8000/api/tasks/1 \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
-```
-
-**Update a task**:
-```bash
+# 5. Update a task
 curl -X PUT http://localhost:8000/api/tasks/1 \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "Buy groceries and cook dinner",
-    "is_completed": true
-  }'
-```
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{"is_completed":true}'
 
-**Delete a task**:
-```bash
+# 6. Delete a task
 curl -X DELETE http://localhost:8000/api/tasks/1 \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
-### 3. Test with Swagger UI
+---
 
-1. Open http://localhost:8000/docs
-2. Click "Authorize" button
-3. Enter: `Bearer YOUR_JWT_TOKEN`
-4. Click "Authorize"
-5. Try any endpoint by clicking "Try it out"
+## Project Structure Overview
+
+```
+frontend/
+├── app/                      # Next.js App Router
+│   ├── (auth)/              # Public auth pages
+│   │   ├── signin/page.tsx
+│   │   └── signup/page.tsx
+│   ├── (protected)/         # Protected pages
+│   │   └── dashboard/page.tsx
+│   ├── layout.tsx           # Root layout
+│   ├── page.tsx             # Landing page
+│   └── globals.css          # Global styles
+├── components/              # React components
+│   ├── auth/               # Auth components
+│   ├── tasks/              # Task components
+│   └── ui/                 # Reusable UI components
+├── lib/                     # Utilities and helpers
+│   ├── api/                # API client
+│   ├── auth/               # Better Auth config
+│   └── utils/              # Validation, helpers
+├── types/                   # TypeScript types
+├── middleware.ts            # Route protection
+├── .env.local              # Environment variables (gitignored)
+├── .env.example            # Environment template
+├── next.config.js          # Next.js config
+├── tailwind.config.js      # Tailwind config
+├── tsconfig.json           # TypeScript config
+└── package.json            # Dependencies
+```
 
 ---
 
-## Running Tests
+## Common Issues and Solutions
 
-### Run All Tests
+### Issue: "Cannot connect to backend API"
+
+**Symptoms**: API calls fail with network errors
+
+**Solutions**:
+1. Verify backend is running: `curl http://localhost:8000/health`
+2. Check `NEXT_PUBLIC_API_URL` in `.env.local`
+3. Verify CORS is configured in backend (allow `http://localhost:3000`)
+4. Check browser console for CORS errors
+
+### Issue: "Authentication not working"
+
+**Symptoms**: Always redirected to signin, even after login
+
+**Solutions**:
+1. Check Better Auth configuration in `lib/auth/better-auth.ts`
+2. Verify `NEXT_PUBLIC_BETTER_AUTH_URL` in `.env.local`
+3. Check browser cookies (should see `better-auth.session_token`)
+4. Clear browser cookies and try again
+5. Check backend JWT verification (shared secret must match)
+
+### Issue: "TypeScript errors"
+
+**Symptoms**: Red squiggly lines in editor, build fails
+
+**Solutions**:
+1. Run `npm run type-check` to see all errors
+2. Ensure all types are imported correctly
+3. Check `tsconfig.json` is properly configured
+4. Restart TypeScript server in VS Code (Cmd+Shift+P → "Restart TS Server")
+
+### Issue: "Styles not applying"
+
+**Symptoms**: Tailwind classes not working
+
+**Solutions**:
+1. Verify `tailwind.config.js` content paths include all component files
+2. Check `globals.css` imports Tailwind directives
+3. Restart dev server (`npm run dev`)
+4. Clear `.next` cache: `rm -rf .next && npm run dev`
+
+### Issue: "Hot reload not working"
+
+**Symptoms**: Changes don't appear without manual refresh
+
+**Solutions**:
+1. Check file is saved
+2. Restart dev server
+3. Check for syntax errors in terminal
+4. Try hard refresh in browser (Ctrl+Shift+R)
+
+---
+
+## Development Best Practices
+
+### Code Organization
+
+1. **Components**: One component per file, named exports
+2. **Types**: Define in `types/` directory, import where needed
+3. **API calls**: Centralize in `lib/api/`, don't call axios directly in components
+4. **Validation**: Define Zod schemas in `lib/utils/validation.ts`
+5. **Styles**: Use Tailwind utility classes, avoid custom CSS
+
+### TypeScript
+
+1. **Enable strict mode**: Already configured in `tsconfig.json`
+2. **Avoid `any` type**: Use proper types or `unknown`
+3. **Use type inference**: Let TypeScript infer types from Zod schemas
+4. **Export types**: Make types reusable across components
+
+### Performance
+
+1. **Use Server Components**: Default in App Router, faster initial load
+2. **Client Components only when needed**: For interactivity (forms, buttons)
+3. **Optimize images**: Use Next.js `<Image>` component
+4. **Lazy load modals**: Use dynamic imports for heavy components
+
+### Security
+
+1. **Never expose secrets**: Use environment variables, never commit `.env.local`
+2. **Validate user input**: Use Zod schemas before API calls
+3. **Handle errors gracefully**: Don't expose sensitive error details to users
+4. **Use httpOnly cookies**: For JWT token storage (XSS protection)
+
+---
+
+## Deployment Preparation
+
+### Build for Production
 
 ```bash
-cd backend
-pytest
+# Create optimized production build
+npm run build
+
+# Test production build locally
+npm start
 ```
 
-### Run Specific Test Files
+### Environment Variables for Production
+
+Update `.env.production` (or deployment platform settings):
 
 ```bash
-# Authentication tests
-pytest tests/test_auth.py
-
-# Task CRUD tests
-pytest tests/test_tasks.py
-
-# Data isolation tests
-pytest tests/test_isolation.py
+NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+NEXT_PUBLIC_BETTER_AUTH_URL=https://yourdomain.com
+NODE_ENV=production
 ```
 
-### Run with Coverage
+### Pre-deployment Checklist
 
-```bash
-pytest --cov=app --cov-report=html
-```
-
-View coverage report: `open htmlcov/index.html`
-
-### Test Output Example
-
-```
-============================= test session starts ==============================
-collected 15 items
-
-tests/test_auth.py ....                                                  [ 26%]
-tests/test_tasks.py .......                                              [ 73%]
-tests/test_isolation.py ....                                             [100%]
-
-============================== 15 passed in 2.34s ===============================
-```
-
----
-
-## Common Issues & Solutions
-
-### Issue: Database Connection Failed
-
-**Error**: `asyncpg.exceptions.InvalidPasswordError`
-
-**Solution**:
-- Verify `DATABASE_URL` in `.env` is correct
-- Check Neon dashboard for correct credentials
-- Ensure connection string uses `postgresql+asyncpg://`
-
-### Issue: JWT Verification Failed
-
-**Error**: `401 Unauthorized - Invalid or expired token`
-
-**Solution**:
-- Verify `BETTER_AUTH_SECRET` matches the auth service
-- Check token hasn't expired
-- Ensure token is in format: `Bearer <token>`
-
-### Issue: Import Errors
-
-**Error**: `ModuleNotFoundError: No module named 'fastapi'`
-
-**Solution**:
-- Activate virtual environment: `source venv/bin/activate`
-- Install dependencies: `pip install -r requirements.txt`
-
-### Issue: Port Already in Use
-
-**Error**: `OSError: [Errno 48] Address already in use`
-
-**Solution**:
-- Kill process using port 8000: `lsof -ti:8000 | xargs kill -9`
-- Or use different port: `uvicorn app.main:app --port 8001`
-
----
-
-## Development Workflow
-
-### 1. Make Code Changes
-
-Edit files in `backend/app/`
-
-### 2. Server Auto-Reloads
-
-With `--reload` flag, server automatically restarts on file changes.
-
-### 3. Test Changes
-
-```bash
-# Run tests
-pytest
-
-# Or test manually with curl/Swagger UI
-```
-
-### 4. Commit Changes
-
-```bash
-git add .
-git commit -m "Add task update endpoint"
-```
-
----
-
-## API Documentation
-
-### Interactive Docs (Swagger UI)
-- URL: http://localhost:8000/docs
-- Features: Try endpoints, see schemas, authentication
-
-### Alternative Docs (ReDoc)
-- URL: http://localhost:8000/redoc
-- Features: Clean layout, better for reading
-
-### OpenAPI Schema
-- URL: http://localhost:8000/openapi.json
-- Features: Machine-readable API specification
-
----
-
-## Environment Variables Reference
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes | - | Neon PostgreSQL connection string |
-| `BETTER_AUTH_SECRET` | Yes | - | JWT verification secret |
-| `JWT_ALGORITHM` | No | HS256 | JWT signing algorithm |
-| `ENVIRONMENT` | No | development | Environment name |
-| `DEBUG` | No | false | Enable debug mode |
-
----
-
-## Next Steps
-
-1. **Implement Authentication**: Integrate with Better Auth for user signup/signin
-2. **Add Frontend**: Build Next.js frontend to consume this API
-3. **Deploy**: Deploy to production (Vercel, Railway, etc.)
-4. **Monitor**: Add logging and monitoring
-5. **Scale**: Optimize for production load
+- [ ] All environment variables configured for production
+- [ ] Backend API accessible from production frontend URL
+- [ ] CORS configured to allow production frontend origin
+- [ ] HTTPS enabled (required for secure cookies)
+- [ ] Error tracking configured (e.g., Sentry)
+- [ ] Analytics configured (if needed)
+- [ ] All manual tests passing
+- [ ] TypeScript build succeeds (`npm run build`)
+- [ ] No console errors in production build
 
 ---
 
 ## Additional Resources
 
-- **FastAPI Documentation**: https://fastapi.tiangolo.com/
-- **SQLModel Documentation**: https://sqlmodel.tiangolo.com/
-- **Neon Documentation**: https://neon.tech/docs/
-- **Pydantic Documentation**: https://docs.pydantic.dev/
-- **JWT Best Practices**: https://tools.ietf.org/html/rfc8725
+### Documentation
+
+- [Next.js 16 Documentation](https://nextjs.org/docs)
+- [React 19 Documentation](https://react.dev)
+- [Better Auth Documentation](https://better-auth.com/docs)
+- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
+- [Zod Documentation](https://zod.dev)
+
+### Related Files
+
+- Backend API: `backend/README.md`
+- Feature Specification: `specs/004-nextjs-frontend/spec.md`
+- Implementation Plan: `specs/004-nextjs-frontend/plan.md`
+- Data Model: `specs/004-nextjs-frontend/data-model.md`
+- API Contracts: `specs/004-nextjs-frontend/contracts/`
 
 ---
 
 ## Support
 
 For issues or questions:
-1. Check the [API documentation](http://localhost:8000/docs)
-2. Review the [specification](./spec.md)
-3. Check the [implementation plan](./plan.md)
-4. Review test files for usage examples
+1. Check this quickstart guide
+2. Review the feature specification
+3. Check backend API documentation
+4. Review Better Auth documentation
+5. Check browser console for errors
+6. Check terminal for build errors
 
 ---
 
-## Quick Reference
-
-**Start server**: `uvicorn app.main:app --reload`
-**Run tests**: `pytest`
-**View docs**: http://localhost:8000/docs
-**API base URL**: http://localhost:8000/api
+**Last Updated**: 2026-02-08
